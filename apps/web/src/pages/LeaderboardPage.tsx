@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
+import { publicTournamentsQuery } from '../lib/publicArchive';
 import { timeAgo } from '../lib/format';
 import { filterInactive } from '../lib/activity';
 import { useNow } from '../lib/useNow';
@@ -38,10 +39,7 @@ export function LeaderboardPage() {
     queryKey: ['ratingHistory'],
     queryFn: () => trpc.public.ratingHistory.query({ verifiedFits: true }),
   });
-  const tournaments = useQuery({
-    queryKey: ['tournaments'],
-    queryFn: () => trpc.public.tournaments.query(),
-  });
+  const tournaments = useQuery(publicTournamentsQuery);
 
   /**
    * The field the screen is actually about. Hiding the long tail of players who
@@ -142,22 +140,17 @@ export function LeaderboardPage() {
   // Already filtered and re-ranked by the inactivity setting; see lib/activity.
   const rows = board.rows;
 
-  /**
-   * The attendance rule in one sentence, built from the settings actually in
-   * force. Worth spending masthead space on: the point of moving the penalty out
-   * of the error bar was that a member can now be told exactly what missing a
-   * club night costs, and a rule nobody states is not really legible.
-   */
-  const policyLine = (() => {
-    const { graceEvents, penaltyPerEvent, penaltyCap } = activityPolicy;
-    const grace =
-      graceEvents === 0
-        ? 'Miss a club night'
-        : graceEvents === 1
-          ? 'Miss one club night and nothing happens; after that'
-          : `Miss up to ${graceEvents} club nights and nothing happens; after that`;
-    return `${grace} it is ${Math.round(penaltyPerEvent)} points a night, capped at ${Math.round(penaltyCap)}, and a single night back clears the lot.`;
-  })();
+  const { graceEvents, penaltyPerEvent, penaltyCap } = activityPolicy;
+  const hasAttendancePenalty = penaltyPerEvent !== 0 && penaltyCap !== 0;
+  const chargedNights =
+    graceEvents === 0
+      ? 'Each missed club night'
+      : graceEvents === 1
+        ? 'The first missed club night is free. Each later miss'
+        : `The first ${graceEvents} missed club nights are free. Each later miss`;
+  const policyLine = hasAttendancePenalty
+    ? `${chargedNights} costs ${penaltyPerEvent} points, up to ${penaltyCap} total. Playing again clears the penalty.`
+    : 'There is no attendance penalty.';
 
   const summary = (() => {
     if (rows.length === 0) return null;
@@ -193,10 +186,12 @@ export function LeaderboardPage() {
           <p className="hero-eyebrow">{coverage}</p>
           <h1 className="hero-title">Rankings</h1>
           <p className="hero-sub muted">
-            Skill estimate adjusted for attendance.{' '}
+            {hasAttendancePenalty
+              ? 'Skill estimate adjusted for attendance.'
+              : 'Ranked by skill estimate.'}{' '}
             <InfoTip label="How ranking works">
-              Ranked on your skill estimate, less a penalty for missed club nights. {policyLine} The
-              smaller figure is the estimate and its ± band — play more and the band narrows.
+              {policyLine} The smaller figure shows the skill estimate and its ± band. Play more and
+              the band narrows.
             </InfoTip>
           </p>
         </div>

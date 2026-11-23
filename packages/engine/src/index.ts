@@ -16,3 +16,4 @@ export * from './identity/alias';
 export * from './challonge/extract';
 export * from './results';
 export * from './doubles';
+export * from './doublesEvaluation';

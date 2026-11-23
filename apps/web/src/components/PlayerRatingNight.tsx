@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { PlayerData } from '../lib/apiTypes';
-import { formatDate } from '../lib/format';
+import { formatUtcDayKey } from '../lib/format';
 import { InfoTip } from './InfoTip';
 import { Select, SelectItem } from './ui/Select';
 
@@ -15,7 +15,7 @@ function ratingChange(before: number | null, after: number | null) {
 }
 
 function nightDate(key: string) {
-  return formatDate(`${key}T12:00:00Z`);
+  return formatUtcDayKey(key);
 }
 
 export function PlayerRatingNight({ nights }: { nights: PlayerData['nights'] }) {

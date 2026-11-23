@@ -31,6 +31,31 @@ jobs:
       - id: classify
         run: node scripts/publish-verification-lane.mjs
 
+  numbered-source:
+    name: Resolve the numbered release source
+    needs: classify
+    if: >-
+      ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && (needs.classify.outputs.lane == 'version' || needs.classify.outputs.lane == '') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      source_sha: ${{ steps.source.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-node-pnpm
+      - id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/resolve-numbered-publish.mjs
+
   # No workflow_run/pull_request_target: fork code never reaches a privileged job.
   verify:
     needs: classify
@@ -46,34 +71,51 @@ jobs:
     permissions:
       contents: read
 
-  publish:
-    needs: verify
-    if: needs.verify.result == 'success' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    outputs:
-      version: ${{ steps.release.outputs.version }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  verify-snapshot:
+    needs: numbered-source
+    if: needs.numbered-source.outputs.source_sha != '' && needs.numbered-source.outputs.source_sha != github.sha
+    concurrency:
+      group: publish-verification-numbered-snapshot
+      queue: max
+    uses: ./.github/workflows/ci.yml
+    with:
+      snapshot_sha: ${{ needs.numbered-source.outputs.source_sha }}
     permissions:
       contents: read
+
+  publish:
+    needs: [verify, numbered-source]
+    if: ${{ !cancelled() && needs.verify.result == 'success' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    outputs: &published
+      version: ${{ steps.release.outputs.version }}
+      source_sha: ${{ steps.release.outputs.source_sha }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions: &registry-permissions
+      contents: read
       packages: write
+    env:
+      VERIFIED_SHA: ${{ github.sha }}
+      NUMBERED_RELEASE_SHA: ${{ needs.numbered-source.outputs.source_sha }}
+      ARTIFACT_PREFIX: ''
     # Keep waiting publications queued while only one job writes registry tags.
-    concurrency:
+    concurrency: &registry-queue
       group: registry-publication
       cancel-in-progress: false
       queue: max
-    steps:
+    steps: &publish-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: verified-production-image
+          name: ${{ env.ARTIFACT_PREFIX }}verified-production-image
           path: verified-image
       - name: Load the image that passed the runtime gate
         run: |
           gunzip -c verified-image/production-image.tar.gz | docker load
-          test "$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' smashclub:smoke)" = "$GITHUB_SHA"
+          test "$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' smashclub:smoke)" = "$VERIFIED_SHA"
       # Read current main after verification to protect the mutable image tag.
       - id: release
         run: node scripts/publication-tags.mjs
@@ -81,7 +123,13 @@ jobs:
         if: steps.release.outputs.version != ''
         env:
           VERSION: ${{ steps.release.outputs.version }}
-        run: node scripts/release-notes.mjs "$VERSION" > /dev/null
+        run: |
+          if [[ "$VERIFIED_SHA" == "$GITHUB_SHA" ]]; then
+            node scripts/release-notes.mjs "$VERSION" > /dev/null
+          else
+            git worktree add --detach "$RUNNER_TEMP/verified-release-source" "$VERIFIED_SHA"
+            node "$RUNNER_TEMP/verified-release-source/scripts/release-notes.mjs" "$VERSION" > /dev/null
+          fi
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -98,17 +146,36 @@ jobs:
           echo '### Published verified image' >> "$GITHUB_STEP_SUMMARY"
           echo "$TAGS" >> "$GITHUB_STEP_SUMMARY"
 
+  publish-snapshot:
+    needs: [verify-snapshot, numbered-source]
+    if: needs.verify-snapshot.result == 'success'
+    outputs: *published
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions: *registry-permissions
+    concurrency: *registry-queue
+    env:
+      VERIFIED_SHA: ${{ needs.numbered-source.outputs.source_sha }}
+      NUMBERED_RELEASE_SHA: ${{ needs.numbered-source.outputs.source_sha }}
+      ARTIFACT_PREFIX: 'numbered-'
+    steps: *publish-steps
+
   release:
     needs: publish
     if: needs.publish.outputs.version != ''
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
+    permissions: &release-permissions
       contents: write
-    concurrency:
-      group: release-${{ needs.publish.outputs.version }}
+    # Versions can finish CI in either order. Serialize the Latest decision and write.
+    concurrency: &release-queue
+      group: release-record-publication
       cancel-in-progress: false
-    steps:
+      queue: max
+    env:
+      VERSION: ${{ needs.publish.outputs.version }}
+      VERIFIED_SHA: ${{ needs.publish.outputs.source_sha }}
+    steps: &release-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
@@ -116,20 +183,34 @@ jobs:
       - name: Publish release notes and exact build tag
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.publish.outputs.version }}
         run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          source_dir="$PWD"
+          if [[ "$VERIFIED_SHA" != "$GITHUB_SHA" ]]; then
+            source_dir="$RUNNER_TEMP/verified-release-source"
+            git worktree add --detach "$source_dir" "$VERIFIED_SHA"
+          fi
+          test "$(git -C "$source_dir" rev-parse HEAD)" = "$VERIFIED_SHA"
           tag="v$VERSION"
-          node scripts/release-notes.mjs "$VERSION" > "$RUNNER_TEMP/release-notes.md"
+          node "$source_dir/scripts/release-notes.mjs" "$VERSION" > "$RUNNER_TEMP/release-notes.md"
           if git show-ref --verify --quiet "refs/tags/$tag"; then
-            test "$(git rev-parse "refs/tags/$tag^{commit}")" = "$GITHUB_SHA"
+            test "$(git rev-parse "refs/tags/$tag^{commit}")" = "$VERIFIED_SHA"
           else
             test "$GITHUB_REF" = refs/heads/main
             git -c user.name=github-actions[bot] -c user.email=41898282+github-actions[bot]@users.noreply.github.com \
-              tag -a "$tag" "$GITHUB_SHA" -m "Nemesis $VERSION"
+              tag -a "$tag" "$VERIFIED_SHA" -m "Nemesis $VERSION"
             git push origin "refs/tags/$tag"
           fi
-          if gh release view "$tag" --json tagName --jq .tagName; then
-            exit 0
-          fi
-          gh release create "$tag" --verify-tag \
-            --title "Nemesis $VERSION" --notes-file "$RUNNER_TEMP/release-notes.md"
+          node scripts/publish-release-record.mjs "$tag" "$RUNNER_TEMP/release-notes.md"
+
+  release-snapshot:
+    needs: publish-snapshot
+    if: needs.publish-snapshot.outputs.version != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: *release-permissions
+    concurrency: *release-queue
+    env:
+      VERSION: ${{ needs.publish-snapshot.outputs.version }}
+      VERIFIED_SHA: ${{ needs.publish-snapshot.outputs.source_sha }}
+    steps: *release-steps

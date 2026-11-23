@@ -188,6 +188,11 @@
   overflow-wrap: anywhere;
   min-width: 0;
 }
+.event-contender > span:has(> .event-entrant-pair) {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1);
+}
 .event-contender > strong {
   font-size: 32px;
   min-width: 35px;
@@ -291,7 +296,7 @@
   display: inline-block;
   width: 30px;
 }
-.event-display .btn {
+.event-display .btn:not(:where(.overlay-setup-toggle[data-preview])) {
   border-radius: 0;
   border: 1px solid var(--event-rule);
   background: transparent;
@@ -301,7 +306,7 @@
   letter-spacing: 0.06em;
   padding: 12px 16px;
 }
-.event-display .btn:hover {
+.event-display .btn:not(:where(.overlay-setup-toggle[data-preview])):hover {
   background: var(--event-red);
   color: var(--event-ink);
   border-color: var(--event-red);
@@ -550,7 +555,7 @@
   text-overflow: ellipsis;
 }
 /* Leave room for the separately positioned Display setup trigger. */
-.event-overlay:has(> .overlay-setup-toggle) .broadcast-topline.has-twitch-link {
+.event-overlay:has(> .overlay-setup-toggle:not([hidden])) .broadcast-topline.has-twitch-link {
   padding-right: max(2vw, calc(1vw + 6.5rem));
 }
 .broadcast-matchup {
@@ -800,7 +805,7 @@
   }
 }
 @media (max-width: 540px) {
-  .event-overlay:has(> .overlay-setup-toggle) .broadcast-topline.has-twitch-link {
+  .event-overlay:has(> .overlay-setup-toggle:not([hidden])) .broadcast-topline.has-twitch-link {
     padding-right: calc(1vw + 5.25rem);
   }
   .broadcast-topline .broadcast-twitch-link {
@@ -987,7 +992,7 @@
   font-weight: 400;
   overflow-wrap: anywhere;
 }
-.event-pool tbody th:has(> .player-profile-preview-name) {
+.event-pool tbody th:has(> :is(.player-profile-preview-name, .event-entrant-pair)) {
   padding-block: var(--s1);
 }
 .event-pool abbr {
@@ -1164,7 +1169,7 @@
   object-fit: contain;
   background: #000;
 }
-.overlay-setup-toggle {
+.overlay-setup-toggle:not(:where([data-preview])) {
   position: fixed;
   right: 1vw;
   top: 0.7vh;
@@ -1178,9 +1183,37 @@
   padding: 4px 8px;
   opacity: 0.25;
 }
-.overlay-setup-toggle:hover,
-.overlay-setup-toggle:focus-visible {
+.overlay-setup-toggle:not(:where([data-preview])):hover,
+.overlay-setup-toggle:not(:where([data-preview])):focus-visible {
   opacity: 1;
+}
+/* An editable preview reserves an operator toolbar outside the OBS scene. */
+.event-overlay:has(> .overlay-setup-toggle[data-preview]) {
+  --preview-trigger-inset: max(var(--s2), env(safe-area-inset-top));
+  --preview-trigger-height: var(--control-height);
+  --preview-toolbar-height: calc(
+    var(--preview-trigger-height) + var(--preview-trigger-inset) + var(--s2)
+  );
+  --capture-height: min(43.875vw, calc((100vh - var(--preview-toolbar-height)) * 0.78));
+  --capture-width: calc(var(--capture-height) * 16 / 9);
+  border-block-start: var(--preview-toolbar-height) solid var(--surface);
+}
+.event-overlay:has(> .overlay-setup-toggle[data-preview]) .broadcast-topline.has-twitch-link {
+  padding-right: 2vw;
+}
+.overlay-setup-toggle[data-preview] {
+  position: fixed;
+  inset-block-start: var(--preview-trigger-inset);
+  inset-inline-end: max(var(--s2), env(safe-area-inset-right));
+  z-index: 20;
+}
+@media (max-width: 560px), (pointer: coarse) {
+  .event-overlay:has(> .overlay-setup-toggle[data-preview]) {
+    --preview-trigger-height: var(--touch-target);
+  }
+}
+.overlay-setup-toggle[data-preview][hidden] {
+  display: none;
 }
 .overlay-setup {
   display: grid;
@@ -1267,7 +1300,7 @@
     top: 12px;
     padding: 18px;
   }
-  .overlay-setup-toggle {
+  .overlay-setup-toggle:not(:where([data-preview])) {
     font-size: 8px;
   }
 }

@@ -1,7 +1,17 @@
-import { Children, cloneElement, isValidElement, type ComponentProps, type ReactNode } from 'react';
+import { useRouterState } from '@tanstack/react-router';
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useRef,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
 import { Markdown } from 'markdown-to-jsx';
 import changelog from '../../CHANGELOG.md?raw';
 import { PageHeader } from '../components/ui/PageHeader';
+import { formatChangelog, releaseGroupHeadings } from '../lib/changelog.mjs';
 import './ChangelogPage.css';
 
 const categoryStyles = new Map([
@@ -11,7 +21,13 @@ const categoryStyles = new Map([
   ['Fix', 'fix'],
   ['Maintenance', 'maintenance'],
 ]);
-const releaseTiers = new Set(['Major Changes', 'Minor Changes', 'Patch Changes']);
+const releaseGroups = new Set([
+  ...releaseGroupHeadings,
+  'Major Changes',
+  'Minor Changes',
+  'Patch Changes',
+]);
+const formattedChangelog = formatChangelog(changelog);
 
 function ReleaseHeading({ children, ...props }: ComponentProps<'h2'>) {
   const [text] = Children.toArray(children);
@@ -19,7 +35,13 @@ function ReleaseHeading({ children, ...props }: ComponentProps<'h2'>) {
   return (
     <h2
       {...props}
-      className={text === 'Before versioned releases' ? 'changelog-archive' : undefined}
+      className={
+        version
+          ? 'changelog-release'
+          : text === 'Before versioned releases'
+            ? 'changelog-archive'
+            : undefined
+      }
     >
       {version ? (
         <a href={`https://github.com/ashleylamont/smashclub-seeding/releases/tag/v${version}`}>
@@ -38,7 +60,7 @@ function GroupHeading({ children, ...props }: ComponentProps<'h3'>) {
     <h3
       {...props}
       className={
-        typeof text === 'string' && releaseTiers.has(text) ? 'changelog-release-tier' : undefined
+        typeof text === 'string' && releaseGroups.has(text) ? 'changelog-release-group' : undefined
       }
     >
       {children}
@@ -92,8 +114,35 @@ function Screenshot({ src, alt }: ComponentProps<'img'>) {
 }
 
 export function ChangelogPage() {
+  const page = useRef<HTMLDivElement>(null);
+  const hash = useRouterState({ select: (state) => state.location.hash });
+
+  useEffect(() => {
+    const target = hash ? document.getElementById(hash) : null;
+    if (!target || !page.current?.contains(target)) return;
+
+    // The router scrolls as soon as the route renders. Late fonts can reflow
+    // the earlier entries and move the heading under the sticky navigation.
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    const options = { capture: true, passive: true, signal: controller.signal };
+    for (const event of ['keydown', 'pointerdown', 'wheel']) {
+      window.addEventListener(event, cancel, options);
+    }
+    void document.fonts.ready.then(() => {
+      requestAnimationFrame(() => {
+        if (controller.signal.aborted) return;
+        cancel();
+        const top = target.getBoundingClientRect().top;
+        const margin = Number.parseFloat(getComputedStyle(target).scrollMarginBlockStart);
+        if (top < margin - 1 || top >= window.innerHeight) target.scrollIntoView();
+      });
+    });
+    return cancel;
+  }, [hash]);
+
   return (
-    <div className="page changelog-page">
+    <div className="page changelog-page" ref={page}>
       <PageHeader title="Nemesis changelog" />
       <Markdown
         options={{
@@ -107,7 +156,7 @@ export function ChangelogPage() {
           },
         }}
       >
-        {changelog}
+        {formattedChangelog}
       </Markdown>
     </div>
   );

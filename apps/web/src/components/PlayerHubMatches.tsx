@@ -13,6 +13,7 @@ import { PoolFilter } from './PoolStationQueue';
 import { scoreApprovalPolicy } from '../lib/poolFlow';
 import { matchStatus, matchStation } from '../lib/playerMatchView';
 import { nextMeaningfulMatch } from '../lib/matchPresentation';
+import { publicEventProfilePreviews } from '../lib/playerHubView';
 import type { PlayerEventHub, PublicEventSnapshot } from '../lib/usePlayerEventHub';
 
 export function PlayerHubMatches({
@@ -59,6 +60,7 @@ export function PlayerHubMatches({
     signedIn,
     keepBrowsingScope,
   } = hub;
+  const previews = publicEventProfilePreviews(data, closed);
   const nextMatchId = nextMatch?.id;
   const matchGrid = useRef<HTMLDivElement>(null);
   const pendingMatchJump = useRef<string | null>(null);
@@ -246,7 +248,7 @@ export function PlayerHubMatches({
               onSubmit={(input) => submitScore(match.id, input)}
               approvalPolicy={!closed && playOpen ? scoreApprovalPolicy(data, match) : 'review'}
               match={match}
-              showPlayerPreviews={!closed && data.plan.competitionFormat === 'singles'}
+              {...previews}
               memberNames={data.memberNames}
               playedCharacters={data.charactersPlayed?.[match.id]}
               lateReport={

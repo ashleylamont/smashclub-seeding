@@ -142,33 +142,28 @@ test.describe('public browsing', () => {
   }) => {
     await page.goto('/');
     await settle(page);
-    const name = await page
-      .locator('.board-row .identity-name')
-      .first()
-      .evaluate((element) =>
-        Array.from(element.childNodes)
-          .filter((node) => node.nodeType === Node.TEXT_NODE)
-          .map((node) => node.textContent)
-          .join('')
-          .trim(),
-      );
+    const row = page.locator('.board-row').first();
+    const name = await row.locator('.identity-name').evaluate((element) =>
+      Array.from(element.childNodes)
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent)
+        .join('')
+        .trim(),
+    );
+    const clubRating = await row.locator('.rating-value').innerText();
 
-    await page.locator('.board-row .board-link').first().click();
+    await row.locator('.board-link').click();
     await expect(page).toHaveURL(/\/players\//);
     await settle(page);
 
     // The board uppercases names in CSS, so compare case-insensitively.
     await expect(page.locator('.profile-name')).toHaveText(new RegExp(escapeRegExp(name), 'i'));
-    /*
-     * The profile leads with the number the board ranks on, and publishes the
-     * skill estimate it is derived from beside it. These assertions still named
-     * the pre-`01b0694` layout — a "Skill" headline over a separate "Seeding
-     * rating" stat — and had been failing ever since that swap.
-     *
-     * `toContainText`, because the label also carries the explanation control.
-     */
-    await expect(page.locator('.headline-label')).toContainText('Rating');
-    await expect(page.locator('.headline-band')).toContainText('±');
+    await expect(page.locator('.profile-identity .eyebrow')).toHaveText(/^Published rank #\d+\b/);
+    const headline = page.locator('.profile-headline');
+    await expect(headline.locator('.headline-label')).toContainText('Club rating');
+    await expect(headline.locator('.headline-value')).toHaveText(clubRating);
+    await expect(headline.getByRole('button', { name: 'Explain: Club rating' })).toBeVisible();
+    await expect(headline.locator('.headline-band')).toContainText('±');
     await expect(page.locator('.profile-stats')).toContainText('Skill estimate');
     // Attendance is stated as its own figure, not left implicit in the band.
     await expect(page.locator('.profile-stats')).toContainText('Attendance');

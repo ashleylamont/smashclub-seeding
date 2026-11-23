@@ -23,6 +23,7 @@ export function OverlaySetup({
   const [showButton, setShowButton] = useState(
     () => new URLSearchParams(location.search).get('controls') !== '0',
   );
+  const editablePreview = new URLSearchParams(location.search).get('controls') === 'preview';
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [device, setDevice] = useState('');
@@ -143,13 +144,15 @@ export function OverlaySetup({
         <span className="capture-corner capture-corner-tl" />
         <span className="capture-corner capture-corner-br" />
       </div>
-      {showButton && !open && (
+      {showButton && (
         <Button
           type="submit"
-          variant="plain"
+          variant={editablePreview ? 'default' : 'plain'}
           className="overlay-setup-toggle"
+          hidden={open}
           onClick={() => setOpen(true)}
           title="Display setup (S)"
+          data-preview={editablePreview || undefined}
         >
           Display setup
         </Button>

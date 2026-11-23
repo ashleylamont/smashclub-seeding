@@ -4,7 +4,7 @@ import { Button } from './ui/Button';
 import { LoadingState, Notice } from './ui/Feedback';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '../lib/trpc';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import {
   CartesianGrid,
   Line,
@@ -50,6 +50,9 @@ const SERIES_SLOTS = [
 const SERIES_DASH = ['0', '6 4', '2 3', '10 4', '1 3', '8 3 2 3', '4 2', '12 5'];
 
 const MAX_SERIES = SERIES_SLOTS.length;
+const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 0 };
+const Y_AXIS_WIDTH = 48;
+const PLOT_GUTTERS = CHART_MARGIN.left + CHART_MARGIN.right + Y_AXIS_WIDTH;
 
 /** How many players are pre-selected on first render. */
 const DEFAULT_SELECTION = 5;
@@ -66,6 +69,7 @@ interface Snapshot {
 export function RatingsOverTime({ players }: RatingsOverTimeProps) {
   const [yMode, setYMode] = useState<YMode>('rating');
   const [search, setSearch] = useState('');
+  const conservativeDescriptionId = useId();
 
   /**
    * playerId -> colour slot. The array position *is* the slot, so a player
@@ -155,11 +159,13 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
       <div className="chart-controls">
         <label className="chart-control">
           <span className="control-label">Y-axis</span>
-          <Select value={yMode} onValueChange={(selectedValue) => setYMode(selectedValue as YMode)}>
+          <Select
+            aria-describedby={yMode === 'cautious' ? conservativeDescriptionId : undefined}
+            value={yMode}
+            onValueChange={(selectedValue) => setYMode(selectedValue as YMode)}
+          >
             <SelectItem value="rating">Skill estimate</SelectItem>
-            {/* The seeding basis, not the board's — labelled as such so the
-                chart is not read as disagreeing with the rankings. */}
-            <SelectItem value="cautious">Seeding basis (rating − 2×SD)</SelectItem>
+            <SelectItem value="cautious">Conservative</SelectItem>
           </Select>
         </label>
         <label className="chart-control chart-control-search">
@@ -173,6 +179,13 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
           />
         </label>
       </div>
+
+      {yMode === 'cautious' && (
+        <p className="muted chart-caption" id={conservativeDescriptionId}>
+          Subtracts two standard deviations from each historical skill estimate. Automatic bracket
+          seeds use the draw’s saved ratings, which can include rookie adjustments.
+        </p>
+      )}
 
       {searchResults.length > 0 && (
         <ul className="chart-search-results">
@@ -244,7 +257,7 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
         <ResponsiveContainer width="100%" height={380}>
           <LineChart
             data={chartData}
-            margin={{ top: 8, right: 16, bottom: 4, left: 0 }}
+            margin={CHART_MARGIN}
             aria-label="Player estimates by club night"
           >
             <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
@@ -264,10 +277,12 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
               tick={{ fill: 'var(--text-soft)', fontSize: 11 }}
               stroke="var(--border-strong)"
               tickLine={false}
-              width={48}
+              width={Y_AXIS_WIDTH}
             />
             <Tooltip
               cursor={{ stroke: 'var(--border-strong)' }}
+              // Recharts positions the tooltip within the plot, excluding the axes and gutters.
+              wrapperStyle={{ maxWidth: `calc(100% - ${PLOT_GUTTERS}px)` }}
               // Recharts hides the whole tooltip when its filtered payload is empty.
               filterNull={false}
               content={({ active, payload, label }) => {

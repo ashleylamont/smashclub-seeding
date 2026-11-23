@@ -133,9 +133,35 @@ test('assigned TO switches an open event-following OBS source independently of f
     await desk.getByRole('button', { name: 'Intermission browser sources' }).press('Enter');
     const link = (label: string) =>
       desk.getByRole('link', { name: `${label} ↗`, exact: true }).getAttribute('href');
-    const followingUrl = (await link('Follow event overlay'))!;
-    const fixedUrl = (await link('Progress-only overlay'))!;
-    await Promise.all([following.goto(followingUrl), fixed.goto(fixedUrl)]);
+    const previewUrl = (await link('Follow event overlay'))!;
+    const fixedUrl = new URL((await link('Progress-only overlay'))!, baseURL);
+    fixedUrl.searchParams.set('controls', '0');
+
+    let copiedUrl = '';
+    await following.exposeFunction('copyFollowingSource', (value: string) => {
+      copiedUrl = value;
+    });
+    await following.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: (value: string) => Reflect.get(window, 'copyFollowingSource')(value) },
+      });
+    });
+    await Promise.all([following.goto(previewUrl), fixed.goto(fixedUrl.href)]);
+    const openSetup = following.getByRole('button', { name: 'Display setup', exact: true });
+    const setup = following.getByRole('dialog', { name: 'Display setup' });
+    await openSetup.press('Enter');
+    await expect(setup.getByRole('combobox', { name: 'Broadcast presentation' })).toContainText(
+      'Follow event',
+    );
+    const timing = setup.getByRole('combobox', { name: 'Change progress page every' });
+    await chooseOption(timing, '30');
+    await following.reload();
+    await openSetup.press('Enter');
+    await expect(timing).toContainText('30 seconds');
+    await setup.getByRole('button', { name: 'Copy OBS source URL' }).press('Enter');
+    await expect(setup.getByText('OBS source URL copied.')).toBeVisible();
+    await following.goto(copiedUrl);
+    await expect(openSetup).toHaveCount(0);
     const followingProgress = following.getByRole('region', { name: 'Tournament progress' });
     const fixedProgress = fixed.getByRole('region', { name: 'Tournament progress' });
     const capture = following.getByRole('region', { name: 'Transparent game capture area' });
@@ -179,14 +205,6 @@ test('assigned TO switches an open event-following OBS source independently of f
       ).status(),
     ).toBe(409);
 
-    await following.keyboard.press('s');
-    const setup = following.getByRole('dialog', { name: 'Display setup' });
-    await expect(setup.getByRole('combobox', { name: 'Broadcast presentation' })).toContainText(
-      'Follow event',
-    );
-    await chooseOption(setup.getByRole('combobox', { name: 'Change progress page every' }), '30');
-    await following.keyboard.press('Escape');
-    await following.reload();
     await expect(following).toHaveURL((url) => {
       const params = url.searchParams;
       return (

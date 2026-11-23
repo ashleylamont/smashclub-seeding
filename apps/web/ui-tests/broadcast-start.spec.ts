@@ -269,7 +269,7 @@ test('Broadcast keeps a score draft on its automatic station during polling', as
   const automatic = panel.getByRole('link', { name: /^Automatic intermission overlay/ });
   await expect(automatic).toHaveAttribute(
     'href',
-    `/overlay/${PLAN_ID}?station=${floor.id}&presentation=auto&controls=0`,
+    `/overlay/${PLAN_ID}?station=${floor.id}&presentation=auto&controls=preview`,
   );
   await ready(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);

@@ -6,7 +6,10 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
+  checks: read
   contents: read
+  pull-requests: read
 
 concurrency:
   group: nemesis-version-pr
@@ -46,19 +49,32 @@ jobs:
             echo 'No pending Changesets on the checked-out main.'
             echo 'skip=true' >> "$GITHUB_OUTPUT"
           fi
-      - uses: ./.github/actions/setup-node-pnpm
+      - name: Inspect the current release candidate
+        id: candidate
         if: steps.version-source.outputs.ready == 'true' && steps.empty-changesets.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/version-candidate.mjs
+      - uses: ./.github/actions/setup-node-pnpm
+        if: steps.candidate.outputs.action == 'version'
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: release-token
-        if: steps.version-source.outputs.ready == 'true' && steps.empty-changesets.outputs.skip != 'true'
+        if: steps.candidate.outputs.action == 'version'
         with:
           client-id: ${{ vars.NEMESIS_RELEASE_APP_CLIENT_ID || secrets.NEMESIS_RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.NEMESIS_RELEASE_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
+      - name: Recheck the release candidate before updating its branch
+        id: candidate-final
+        if: steps.candidate.outputs.action == 'version'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_VERSION_CANDIDATE: ${{ steps.candidate.outputs.candidate }}
+        run: node scripts/version-candidate.mjs
       - name: Recheck main before Changesets updates the version PR
         id: version-source-final
-        if: steps.version-source.outputs.ready == 'true' && steps.empty-changesets.outputs.skip != 'true'
+        if: steps.candidate-final.outputs.action == 'version'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/check-version-source.sh
@@ -76,9 +92,19 @@ jobs:
       - name: Queue the version PR for merge after required checks
         if: steps.changesets.outputs.pr-number != ''
         env:
-          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TOKEN: ${{ steps.release-token.outputs.token }}
           PR: ${{ steps.changesets.outputs.pr-number }}
+          EXPECTED_VERSION_CANDIDATE: ${{ steps.candidate-final.outputs.candidate }}
         run: |
+          if [[ "$EXPECTED_VERSION_CANDIDATE" != legacy ]]; then
+            head="$(node scripts/version-candidate.mjs --queue "$PR")"
+            if [[ -n "$head" ]]; then
+              GH_TOKEN="$RELEASE_TOKEN" gh pr merge "$PR" --auto --merge --match-head-commit "$head"
+            fi
+            exit 0
+          fi
+          export GH_TOKEN="$RELEASE_TOKEN"
           pr="$(gh pr view "$PR" --json state,headRefName,headRefOid,autoMergeRequest)"
           test "$(jq -r .headRefName <<< "$pr")" = changeset-release/main
           if jq -e '.state == "MERGED" or .autoMergeRequest != null' <<< "$pr" > /dev/null; then

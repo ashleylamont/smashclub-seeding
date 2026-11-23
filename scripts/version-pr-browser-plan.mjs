@@ -3,7 +3,7 @@ import { assertAppChangeset } from './check-changeset.mjs';
 import { git } from './pr-merge.mjs';
 
 // Public GitHub account ID for nemesis-release-bot[bot].
-const releaseAppId = 353923899;
+export const releaseAppId = 353923899;
 const changelog = 'apps/web/CHANGELOG.md';
 
 export function isVersionAppPr(event, { actorId, repositoryId, head }) {

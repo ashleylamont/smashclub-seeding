@@ -10,7 +10,7 @@ import type { LiveMatch, PoolQualifierSlot } from '../lib/eventDisplay';
 import { poolStandings } from '../lib/eventQueue';
 import { poolTitle, usesOpenPools } from '../lib/poolFlow';
 import { CharacterIcons } from './CharacterIcons';
-import { PlayerProfileName } from './PlayerProfilePreview';
+import { EventEntrantName } from './PlayerProfilePreview';
 
 export type DisplayStation = {
   id: string;
@@ -92,6 +92,7 @@ export function EventPools({
   recordedOnly,
   structure,
   showPlayerPreviews,
+  profileMemberNames,
 }: {
   matches: LiveMatch[];
   schedules: PoolSchedule[];
@@ -99,6 +100,7 @@ export function EventPools({
   recordedOnly: boolean;
   structure?: string;
   showPlayerPreviews: boolean;
+  profileMemberNames?: Readonly<Record<string, string>>;
 }) {
   const pools = poolStandings(matches);
   if (!pools.length) return null;
@@ -151,7 +153,7 @@ export function EventPools({
                 <table>
                   <thead>
                     <tr>
-                      <th>Player</th>
+                      <th>{profileMemberNames ? 'Team' : 'Player'}</th>
                       <th>
                         <abbr title="Sets won">W</abbr>
                       </th>
@@ -171,15 +173,17 @@ export function EventPools({
                       const match = matches.find(
                         (item) => item.player1Id === player.id || item.player2Id === player.id,
                       );
-                      const characters =
-                        match?.player1Id === player.id
-                          ? match.player1Characters
-                          : match?.player2Characters;
+                      const first = match?.player1Id === player.id;
+                      const memberIds = first ? match.player1MemberIds : match?.player2MemberIds;
+                      const characters = first ? match.player1Characters : match?.player2Characters;
                       return (
                         <tr key={player.id}>
                           <th scope="row">
-                            <PlayerProfileName
-                              playerId={showPlayerPreviews ? player.id : null}
+                            <EventEntrantName
+                              entrantId={player.id}
+                              singlesPreview={showPlayerPreviews}
+                              memberIds={memberIds}
+                              memberNames={profileMemberNames}
                               name={player.name}
                             />
                             <CharacterIcons slugs={characters ?? []} />
@@ -213,6 +217,7 @@ export function EventBrackets({
   recordedOnly = false,
   graphicContext,
   showPlayerPreviews = false,
+  profileMemberNames,
 }: {
   title?: string;
   brackets: NativeBracketView[];
@@ -222,6 +227,7 @@ export function EventBrackets({
   recordedOnly?: boolean;
   graphicContext?: Omit<BracketGraphicContext, 'scope'> & { structure?: string };
   showPlayerPreviews?: boolean;
+  profileMemberNames?: Readonly<Record<string, string>>;
 }) {
   if (!brackets.length && !linked.some((item) => item.slug)) return null;
   const names = new Map(entrants.map((player) => [player.id, player.name]));
@@ -290,6 +296,7 @@ export function EventBrackets({
                 labels={labels}
                 recordedOnly={recordedOnly}
                 showPlayerPreviews={showPlayerPreviews}
+                profileMemberNames={profileMemberNames}
               />
             ))}
             {bracket.complete && bracket.standings.length > 0 && (
