@@ -1,0 +1,67 @@
+name: Portable UI preview benchmark
+
+on:
+  push:
+    branches: [codex/portable-ui-preview-benchmark-549]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: portable-ui-preview-benchmark-549
+  cancel-in-progress: false
+
+jobs:
+  paired:
+    name: Portable UI dev and built (${{ matrix.ordinal }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ordinal: 1
+            first: dev
+          - ordinal: 2
+            first: built
+          - ordinal: 3
+            first: dev
+    env:
+      PORTABLE_PREVIEW_ORDINAL: ${{ matrix.ordinal }}
+      PORTABLE_PREVIEW_FIRST: ${{ matrix.first }}
+    steps:
+      - name: Record workflow and runner start
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          runner_start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          mkdir -p "$RUNNER_TEMP/portable-ui-preview-results"
+          created_at=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
+          jq -n --arg created "$created_at" --arg started "$runner_start" \
+            --arg sha "$GITHUB_SHA" --arg image "${ImageOS:-unknown}:${ImageVersion:-unknown}" \
+            --arg processors "$(nproc)" --arg attempt "$GITHUB_RUN_ATTEMPT" \
+            '{workflowCreatedAt: $created, firstRunnerStepAt: $started,
+              secondsToFirstStep: (($started | fromdateiso8601) - ($created | fromdateiso8601)),
+              sha: $sha, image: $image, processors: ($processors | tonumber), attempt: ($attempt | tonumber)}' \
+            | tee "$RUNNER_TEMP/portable-ui-preview-results/runner.json"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-node-pnpm
+      - name: Install the usual portable UI browser
+        run: time pnpm --filter @smashclub/web exec playwright install --with-deps chromium
+      - name: Compare serving modes on this runner
+        run: |
+          PORTABLE_PREVIEW_OUTPUT="$RUNNER_TEMP/portable-ui-preview-results" \
+            bash scripts/benchmark-portable-ui-preview.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: portable-ui-preview-${{ matrix.ordinal }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/portable-ui-preview-results
+          retention-days: 3
+          if-no-files-found: error
