@@ -91,12 +91,19 @@ export async function expectDoublesFinalsMembership(
 export async function expectDoublesArchivePair(
   api: ReturnType<typeof appRouter.createCaller>['public'],
   tournamentIds: string[],
-  memberIds: readonly string[],
+  memberIds: readonly (string | undefined)[],
 ) {
-  const archive = (await api.tournaments()).find((t) => tournamentIds.includes(t.id))!;
+  const [first, second] = memberIds;
+  if (memberIds.length !== 2 || !first || !second || first === second)
+    throw new Error('Expected two distinct doubles member IDs to verify the archive.');
+  const archive = (await api.tournaments()).find((t) => tournamentIds.includes(t.id));
+  if (!archive) throw new Error('Expected a published doubles archive.');
   const overview = await api.eventOverview({ slug: archive.slug });
   const archivedPair = overview?.divisions
     .flatMap((d) => d.players)
-    .find((p) => p.verifiedDoublesPair?.members.some((member) => member.playerId === memberIds[0]));
-  expect(archivedPair?.verifiedDoublesPair?.members.map((p) => p.playerId)).toEqual(memberIds);
+    .find((p) => p.verifiedDoublesPair?.members.some((member) => member.playerId === first));
+  expect(archivedPair?.verifiedDoublesPair?.members.map((p) => p.playerId)).toEqual([
+    first,
+    second,
+  ]);
 }
