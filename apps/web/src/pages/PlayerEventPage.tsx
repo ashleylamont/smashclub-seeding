@@ -268,9 +268,8 @@ function eventFinalsProgress(data: PublicEventSnapshot) {
 }
 
 function playerNextSectionLabel(closed: boolean, data?: PublicEventSnapshot) {
-  if (!closed) return 'What next';
-  if (data?.matches.length && data.poolRounds?.some(({ rounds }) => rounds.length > 0))
-    return 'Pool schedule';
+  if (!closed || data?.matches.length === 0) return 'What next';
+  if (data?.poolRounds?.some(({ rounds }) => rounds.length > 0)) return 'Pool schedule';
 }
 
 function PlayerEventNavigation({

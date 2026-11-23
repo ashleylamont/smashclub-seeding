@@ -161,6 +161,13 @@ for (const theme of ['dark', 'light'] as const) {
       const schedule = page.getByRole('region', { name: 'Event schedule' });
       await expect(schedule).toContainText('No matches are recorded for this event.');
       await expect(schedule).not.toContainText('will publish pairings');
+      const next = page
+        .getByRole('navigation', { name: 'Event sections' })
+        .getByRole('link', { name: 'What next', exact: true });
+      await expect(next).toHaveAttribute('href', '#what-next');
+      await next.press('Enter');
+      await expect(page).toHaveURL(/#what-next$/);
+      await expect(page.getByRole('region', { name: 'What next', exact: true })).toBeInViewport();
       await reviewRoute(page, testInfo, 'hub-cancelled-no-matches');
 
       fixture.snapshot.placements = placements;
