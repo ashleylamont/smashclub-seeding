@@ -594,8 +594,10 @@ export function EventOperationsPanel({
         </TabPanel>
         <TabPanel value="broadcast">
           <MainStagePanel
+            key={planId}
             data={data}
             dispatch={dispatch}
+            active={workspace.section === 'broadcast'}
             disabled={liveDisabled}
             unavailable={event.isError}
             callable={callable}
