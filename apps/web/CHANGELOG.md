@@ -2,6 +2,14 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.12
+
+### Patch Changes
+
+- 23 November 2026 · **Improvement** · Read a short summary when you open a new Nemesis release on GitHub. Expand **Full release notes** for the details. [#629](https://github.com/ashleylamont/smashclub-seeding/pull/629) · [build 8934b74](https://github.com/ashleylamont/smashclub-seeding/commit/8934b74e962baef274206a3bfdb896fe4b1fbe79)
+- 23 November 2026 · **Fix** · Read clearer match and entrant counts when reviewing pool attendance changes and finals. [#631](https://github.com/ashleylamont/smashclub-seeding/pull/631) · [build 97c02ce](https://github.com/ashleylamont/smashclub-seeding/commit/97c02ce7586ecfad9841098be17f41a67d59d2e5)
+- 23 November 2026 · **Fix** · Read set names and report times together in the desktop tournament archive. [#632](https://github.com/ashleylamont/smashclub-seeding/pull/632) · [build f72f5c5](https://github.com/ashleylamont/smashclub-seeding/commit/f72f5c5d60f37394be2da634ae786bee3dd4a1fd)
+
 ## 0.23.11
 
 ### Patch Changes
