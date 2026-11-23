@@ -23,13 +23,15 @@ Open **Run event** from the planner. Set up stations and pool queues, assign TOs
 
 ### Create pool finals
 
-On a rolling Nemesis pool draw, you can start ready finals while other pools are still playing. Open **Standings / draw**.
+With seeding based on pool place and Whole-History Rating (WHR), you can start ready finals while other pools are still playing. Open **Standings / draw**.
 
 1. Choose **Preview finals** to see which brackets are ready and which pool places are still unresolved.
 2. If a bracket is waiting, review pending scores that affect its qualifying places. If a tie leaves one of those places unresolved, have an event administrator use **Confirm pool orders in planner** to record a ruling.
 3. Review the seed order, then choose **Create ready finals** and confirm. The first bracket created in a division fixes that division's eligible pool rosters. Preview again as more brackets become ready.
 
-The top half of active entrants in each pool, rounded up, qualify for championship, with at least two where available. The rest enter consolation. Byes advance automatically and confirmed results advance winners. Older saved draws that use the whole-event policy still wait for the full field. [Native finals and seeding](native-live-api.md#combined-pool-place-and-whr-seeding)
+In **Open pools and finals** and **Upper / Lower pools and finals**, the top half of active entrants in each pool, rounded up, qualify for championship, with at least two where available. **Round robin and playoffs** uses the configured **Playoff entrants** count. Leave it blank to include everyone. Entrants outside the cut enter consolation when it is enabled. Byes advance automatically and confirmed results advance winners.
+
+If an earlier rolling draw already reserved its final brackets, **Preview finals** shows **Finals already created**, the saved brackets, and their current qualifiers. Older whole-event draws wait for the full field. [Native finals and seeding](native-live-api.md#combined-pool-place-and-whr-seeding)
 
 ### Publish native results
 
