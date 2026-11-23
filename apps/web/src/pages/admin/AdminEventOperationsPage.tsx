@@ -1,11 +1,10 @@
-import { isKnockout } from '@smashclub/shared';
 import { NativeDrawTools } from './NativeDrawTools';
 import { filterDeskMatches } from '../../lib/opsMatchFilter';
 import { DispatchDesk, type DispatchDeskNavigation } from './DispatchDesk';
 import { dispatchShortcut } from './dispatchKeyboard';
 import { useDispatchCommand } from './dispatchCommand';
 import { DoublesAvailabilityControls } from './DoublesAvailabilityControls';
-import { PoolDrawControls } from './PoolDrawControls';
+import { MatchDeskDrawCue, PoolDrawControls } from './PoolDrawControls';
 import { OpsPoolStandings } from './OpsPoolStandings';
 import { NativeResultControls } from './NativeResultControls';
 import { Button } from '../../components/ui/Button';
@@ -241,7 +240,6 @@ export function EventOperationsPanel({
       />
     );
   const desk = data.operatorDispatch;
-  const knockout = isKnockout(data.plan.structure);
   const sharedQueue = data.plan.bracketMode === 'native' && desk?.mode === 'shared';
   const available = availableMatches(data.matches).filter((match) => match.availability.canStart);
   const callable = new Set(available.map((match) => match.id));
@@ -368,19 +366,11 @@ export function EventOperationsPanel({
               <section className="card ops-setup" id="match-desk" tabIndex={-1}>
                 <div>
                   <h3>Match desk</h3>
-                  {!data.plan.softLockedAt && (
-                    <p>
-                      {knockout ? 'Soft-lock the bracket in' : 'Soft-lock pools in'}{' '}
-                      <Button
-                        size="small"
-                        type="submit"
-                        onClick={() => void workspace.changeSection('draw')}
-                      >
-                        Standings / draw
-                      </Button>{' '}
-                      to prepare matches.
-                    </p>
-                  )}
+                  <MatchDeskDrawCue
+                    plan={data.plan}
+                    closed={closed}
+                    onOpenDraw={() => void workspace.changeSection('draw')}
+                  />
                 </div>
                 <Button
                   type="submit"

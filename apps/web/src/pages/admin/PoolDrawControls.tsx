@@ -3,7 +3,35 @@ import { Button } from '../../components/ui/Button';
 import { matchPresentation } from '../../lib/matchPresentation';
 import { useConfirmation } from '../../lib/confirmation';
 import { trpc } from '../../lib/trpc';
+import { canSoftLockDraw } from './opsEventStatus';
+
 type Overview = Awaited<ReturnType<typeof trpc.eventOps.overview.query>>;
+const waitForPreparation = 'Waiting for an admin to prepare the bracket.';
+
+export function MatchDeskDrawCue({
+  plan,
+  closed,
+  onOpenDraw,
+}: {
+  plan: Overview['plan'];
+  closed: boolean;
+  onOpenDraw: () => void;
+}) {
+  if (plan.softLockedAt) return null;
+  const knockout = isKnockout(plan.structure);
+  if (knockout && (closed || plan.drawPaused)) return null;
+  if (knockout && !canSoftLockDraw(plan)) return <p>{waitForPreparation}</p>;
+  return (
+    <p>
+      {knockout ? 'Soft-lock the bracket in' : 'Soft-lock pools in'}{' '}
+      <Button size="small" type="submit" onClick={onOpenDraw}>
+        Standings / draw
+      </Button>{' '}
+      to prepare matches.
+    </p>
+  );
+}
+
 export function PoolDrawControls({
   data,
   closed,
@@ -24,7 +52,7 @@ export function PoolDrawControls({
   const knockout = isKnockout(data.plan.structure);
   const drawHeading = knockout ? 'Knockout draw' : 'Pool draw';
   const drawName = drawHeading.toLowerCase();
-  const canSoftLock = paused || (data.plan.status === 'pools_ready' && !softLocked);
+  const canSoftLock = (!knockout || !closed) && (paused || canSoftLockDraw(data.plan));
   let state = paused ? 'Paused' : softLocked ? 'Soft-locked' : 'Draft';
   let description: string | undefined;
   if (knockout) {
@@ -33,7 +61,7 @@ export function PoolDrawControls({
     else if (!softLocked)
       description = canSoftLock
         ? 'Soft-lock the bracket before starting play.'
-        : 'Prepare the bracket in the planner before soft-locking it.';
+        : waitForPreparation;
   } else {
     description = paused
       ? 'Play is paused. Adjust attendance in this desk, then resume the draw.'

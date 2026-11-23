@@ -3,6 +3,7 @@ import { EventBrackets } from '../../components/EventNightBoard';
 import { Notice } from '../../components/ui/Feedback';
 import { BracketBackupSheets } from './BracketBackupSheets';
 import type { Overview } from './dispatchTypes';
+import { canSoftLockDraw } from './opsEventStatus';
 import '../../styles/event-board.css';
 
 /** Read-only tools remain available after finalization and while a draw is paused. */
@@ -31,7 +32,7 @@ export function NativeDrawTools({ data }: { data: Overview }) {
             {ended
               ? 'No elimination bracket was generated for this event.'
               : isKnockout(data.plan.structure)
-                ? data.plan.status === 'pools_ready' && !data.plan.softLockedAt
+                ? canSoftLockDraw(data.plan)
                   ? 'Soft-lock the draw above to view the bracket and print its match order.'
                   : 'The knockout bracket is unavailable.'
                 : 'Finals are not created yet. Preview finals above to review the proposed pairings; paper templates are available below.'}

@@ -8,6 +8,53 @@ for (const [width, theme, structure] of [
   [1440, 'dark', 'double_elimination'],
   [1440, 'light', 'single_elimination'],
 ] as const) {
+  test(`an assigned organiser waits until knockout preparation finishes at ${width}px in ${theme}`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+    const { overview, unexpected } = await mockEvent(page, { role: 'player', idle: true });
+    Object.assign(overview.plan, {
+      structure,
+      liveOwned: false,
+      softLockedAt: null,
+      drawPaused: false,
+    });
+    Object.assign(overview, { matches: [], nativeBrackets: [], poolDrawPauseBlocker: null });
+    const matchDesk = page.locator('#match-desk');
+    const waitForPreparation = 'Waiting for an admin to prepare the bracket.';
+    for (const status of ['draft', 'roster_frozen'] as const) {
+      Object.assign(overview.plan, { status });
+      await page.goto(`/operate/${PLAN_ID}?view=run`);
+      await expect(matchDesk).toContainText(waitForPreparation);
+      await expect(matchDesk.getByRole('button', { name: 'Standings / draw' })).toHaveCount(0);
+      await expect(
+        matchDesk.getByRole('button', { name: 'Prepare / refresh matches' }),
+      ).toBeDisabled();
+      await expect(page.getByRole('link', { name: 'Planner', exact: true })).toHaveCount(0);
+      await matchDesk.screenshot({ path: testInfo.outputPath(`run-${status}.png`) });
+
+      await page.getByRole('tab', { name: 'Standings / draw', exact: true }).press('Enter');
+      const draw = page.getByRole('tabpanel', { name: 'Standings / draw' });
+      await expect(draw.getByText(waitForPreparation, { exact: true })).toBeVisible();
+      await expect(draw.getByRole('button', { name: 'Soft-lock knockout draw' })).toHaveCount(0);
+      await draw
+        .locator('.ops-setup')
+        .screenshot({ path: testInfo.outputPath(`draw-${status}.png`) });
+    }
+    for (const status of ['complete', 'cancelled'] as const) {
+      Object.assign(overview.plan, { status });
+      await page.goto(`/operate/${PLAN_ID}?view=run`);
+      await expect(matchDesk.getByRole('heading', { name: 'Match desk' })).toBeVisible();
+      await expect(matchDesk.getByText(waitForPreparation)).toHaveCount(0);
+      await expect(matchDesk.getByRole('button', { name: 'Standings / draw' })).toHaveCount(0);
+      await expect(
+        matchDesk.getByRole('button', { name: 'Prepare / refresh matches' }),
+      ).toBeDisabled();
+    }
+    expect(unexpected).toEqual([]);
+  });
+
   test(`the ${structure} desk describes the actual draw at ${width}px in ${theme}`, async ({
     page,
   }, testInfo) => {
