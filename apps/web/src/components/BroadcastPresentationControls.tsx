@@ -1,20 +1,25 @@
 import { Select, SelectItem } from './ui/Select';
+import { Switch } from './ui/Switch';
 import { progressIntervals, type BroadcastPresentation } from '../lib/broadcastProgress';
 
 export function BroadcastPresentationControls({
   mode,
   seconds,
   recentCount,
+  showGuestQr,
   onMode,
   onSeconds,
   onRecentCount,
+  onGuestQr,
 }: {
   mode: BroadcastPresentation;
   seconds: number;
   recentCount: number;
+  showGuestQr: boolean;
   onMode: (mode: BroadcastPresentation) => void;
   onSeconds: (seconds: number) => void;
   onRecentCount: (count: number) => void;
+  onGuestQr: (show: boolean) => void;
 }) {
   return (
     <>
@@ -48,6 +53,11 @@ export function BroadcastPresentationControls({
           <SelectItem value={2}>2 sets</SelectItem>
         </Select>
       </label>
+      <label className="ui-actions overlay-source-switch">
+        <Switch checked={showGuestQr} onCheckedChange={onGuestQr} />
+        Show score-reporting QR on this source
+      </label>
+      <p className="muted">Guest access follows the event settings.</p>
     </>
   );
 }

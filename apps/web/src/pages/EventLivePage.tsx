@@ -48,6 +48,9 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
   const [presentation, setPresentation] = useState(() => broadcastPresentation(location.search));
   const [cycleSeconds, setCycleSeconds] = useState(() => progressInterval(location.search));
   const [recentCount, setRecentCount] = useState(() => recentResultCount(location.search));
+  const [showGuestQr, setShowGuestQr] = useState(
+    () => new URLSearchParams(location.search).get('guestQr') !== '0',
+  );
   const [twitch, setTwitch] = useState(() =>
     twitchChannel(new URLSearchParams(location.search).get('twitch') ?? ''),
   );
@@ -103,6 +106,13 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     history.replaceState(history.state, '', url);
     setRecentCount(count);
   };
+  const changeGuestQr = (show: boolean) => {
+    const url = new URL(location.href);
+    if (show) url.searchParams.delete('guestQr');
+    else url.searchParams.set('guestQr', '0');
+    history.replaceState(history.state, '', url);
+    setShowGuestQr(show);
+  };
   const changeTwitch = (channel: string) => {
     const url = new URL(location.href);
     if (channel) url.searchParams.set('twitch', channel);
@@ -119,6 +129,7 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
     retry: false,
   });
   const guestQr =
+    showGuestQr &&
     !guestInvitation.isError &&
     guestInvitation.data &&
     (!guestInvitation.data.expiresAt || Date.parse(guestInvitation.data.expiresAt) > now)
@@ -273,9 +284,11 @@ function EventDisplay({ planId, overlay = false }: { planId: string; overlay?: b
                 mode={presentation}
                 seconds={cycleSeconds}
                 recentCount={recentCount}
+                showGuestQr={showGuestQr}
                 onMode={(mode) => changePresentation(mode, cycleSeconds)}
                 onSeconds={(seconds) => changePresentation(presentation, seconds)}
                 onRecentCount={changeRecentCount}
+                onGuestQr={changeGuestQr}
               />
               <OverlayTwitchSetting channel={twitch} onChange={changeTwitch} />
             </>

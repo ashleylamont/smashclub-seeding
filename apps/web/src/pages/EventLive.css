@@ -1228,6 +1228,11 @@
   margin: 20px 0 12px;
   font-weight: 700;
 }
+.overlay-setup .overlay-source-switch {
+  display: flex;
+  min-height: var(--touch-target);
+  margin: 0;
+}
 .overlay-setup .ui-select {
   width: 100%;
   margin-top: var(--s2);
