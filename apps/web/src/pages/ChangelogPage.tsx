@@ -119,6 +119,7 @@ function Release({ release, open }: { release: ChangelogRelease; open: boolean }
           className="changelog-highlights"
           options={{
             disableParsingRawHTML: true,
+            forceBlock: true,
             forceWrapper: true,
             overrides: { img: () => null },
           }}
