@@ -1,6 +1,6 @@
 import { isSinglePool } from '@smashclub/shared';
 import type { buildRoundRobin } from '@smashclub/tournament-formats';
-import { stableId } from './facts';
+import { hasRecordedMatchEvidence, stableId, unconfirmedCall } from './facts';
 import type { Match, TournamentState } from './schemas';
 
 type Pool = TournamentState['pools'][number];
@@ -14,6 +14,30 @@ export function attendancePoolCandidates(state: TournamentState, division: Pool[
         (isSinglePool(state.baseline?.structure) || pool.entrantIds.length < 5),
     )
     .sort((a, b) => a.entrantIds.length - b.entrantIds.length || a.index - b.index);
+}
+
+export function poolAttendanceBlocker(
+  state: TournamentState,
+  pool: Pool,
+  reported: ReadonlySet<string>,
+) {
+  if (pool.order || pool.orderDecision || pool.qualifierRoster || pool.qualifierDecision)
+    return 'qualification';
+  const matches = state.matches.filter((match) => match.poolId === pool.id);
+  const matchIds = new Set(matches.map((match) => match.id));
+  const archived = (state.supersededPlayedSets ?? []).some(
+    ({ match, sourcePoolMatchId }) =>
+      matchIds.has(sourcePoolMatchId) ||
+      [match.player1Id, match.player2Id].some((id) => id && pool.entrantIds.includes(id)),
+  );
+  if (archived || matches.some((match) => hasRecordedMatchEvidence(match, reported)))
+    return 'evidence';
+  const called = matches.filter((match) => match.status === 'playing' || match.calledAt != null);
+  if (called.length)
+    return called.every(unconfirmedCall)
+      ? { kind: 'call' as const, matchIds: called.map(({ id }) => id) }
+      : 'call_state';
+  return null;
 }
 
 export function lastPoolRound(state: TournamentState, poolId: string) {

@@ -8,6 +8,7 @@ import { substituteDoublesMember } from './doublesSubstitution';
 import { addLateDoublesPair } from './lateDoublesPair';
 import { renameDoublesPair } from './entrants';
 import { replaceResult } from './replacement';
+import { hasCurrentPendingScoreReview } from './scoreReview';
 import type { FinalsDivisionResetScope } from './commands';
 import type { CommandEnvelope, TournamentState } from './schemas';
 
@@ -123,12 +124,17 @@ function requireMatchControlTarget(
       state.settings.resourceRevision === command.expectedResourceRevision,
     'Match or resources changed.',
   );
-  // Recording a live score can start play without changing the revisions above.
-  if (command.onlyIfUntaken)
+  // A live score or pending report can reach the match without changing the revisions above.
+  if (command.onlyIfUntaken) {
     requireFact(
       unconfirmedCall(m),
       'The call changed. Review the match before releasing capacity.',
     );
+    requireFact(
+      !hasCurrentPendingScoreReview(m, state.reports),
+      'Review the pending score report in Score reviews before returning this call.',
+    );
+  }
   requireFact(
     !command.stationId || state.stations.some((s) => s.id === command.stationId && s.enabled),
     'Unknown station.',

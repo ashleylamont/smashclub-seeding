@@ -1,9 +1,14 @@
 import { previewRestoration, restoreEntrant } from './restoration';
 import { isKnockout } from '@smashclub/shared';
-import { buildRoundRobin } from '@smashclub/tournament-formats';
+import { buildRoundRobin, poolLabel } from '@smashclub/tournament-formats';
 import { hash, requireFact, resolved, TournamentConflict, unconfirmedCall } from './facts';
 import { advance, matchInputStatus } from './brackets';
-import { attendancePoolCandidates, poolMatch, lastPoolRound } from './poolAttendance';
+import {
+  attendancePoolCandidates,
+  poolMatch,
+  lastPoolRound,
+  poolAttendanceBlocker,
+} from './poolAttendance';
 import { completeCommandProgression } from './progression';
 import { hasCurrentPendingScoreReview } from './scoreReview';
 import { projectMatchLabels } from './matchNames';
@@ -16,6 +21,7 @@ import {
 import type { CommandEnvelope, Match, TournamentCommand, TournamentState } from './schemas';
 
 type Input = Extract<CommandEnvelope['command'], { kind: 'attendance' }>;
+type Pool = TournamentState['pools'][number];
 type WithdrawalConsequence = {
   state?: 'called' | 'playing' | 'held';
   forfeit?: 'automatic' | 'organiser';
@@ -62,7 +68,8 @@ function ordinaryAttendancePreview(
   const entrant = state.entrants.find((e) => e.playerId === input.playerId);
   const division = (input.action === 'add' ? input.division : entrant?.division) ?? 'lower';
   const protectedPool = (id: string) => poolHasCallsOrHistory(state, id);
-  const open = attendancePoolCandidates(state, division).filter((p) => !protectedPool(p.id));
+  const candidates = attendancePoolCandidates(state, division);
+  const open = candidates.filter((p) => !protectedPool(p.id));
   const pool =
     input.action === 'add'
       ? open[0]
@@ -79,9 +86,25 @@ function ordinaryAttendancePreview(
         ? 'This player is already in the event.'
         : 'This player is not attending.',
     );
-  if (!pool && !(input.action === 'withdraw' && isKnockout(state.baseline?.structure)))
+  const lateAddRecovery = lateAddCalls(
+    state,
+    input,
+    candidates,
+    Boolean(pool) || issues.length > 0,
+  );
+  if (lateAddRecovery) {
+    const calls = lateAddRecovery.matchIds.length === 1 ? 'call' : 'calls';
+    issues.push(
+      `Return the untaken ${calls} in Pool ${poolLabel(lateAddRecovery.poolIndex)}, then refresh this preview.`,
+    );
+  } else if (!pool && !(input.action === 'withdraw' && isKnockout(state.baseline?.structure))) {
     issues.push('No eligible pool is available.');
-  if (input.action === 'add' && input.poolIndex !== undefined && input.poolIndex !== pool?.index)
+  }
+  if (
+    input.action === 'add' &&
+    input.poolIndex !== undefined &&
+    input.poolIndex !== (pool?.index ?? lateAddRecovery?.poolIndex)
+  )
     issues.push('The smallest open pool changed.');
   const involved = state.matches.filter((m) => [m.player1Id, m.player2Id].includes(input.playerId));
   const matchReview = reviewAffectedMatches(input.action, involved, state.reports);
@@ -92,34 +115,17 @@ function ordinaryAttendancePreview(
     issues.push('A pool needs at least two players.');
   if (input.action === 'redistribute' && remaining.length !== 2)
     issues.push('Only a two-player pool can be redistributed.');
-  const relocations: { playerId: string; fromPoolIndex: number; toPoolIndex: number }[] = [];
-  if (
-    pool &&
-    remaining.length === 2 &&
-    ['no_show', 'redistribute'].includes(input.action) &&
-    !protectedPool(pool.id)
-  ) {
-    const targets = open.filter((p) => p.id !== pool.id);
-    const together = targets.find((p) => p.entrantIds.length <= 3);
-    const destinations = together ? [together, together] : targets.slice(0, 2);
-    if (destinations.length === 2)
-      remaining.forEach((playerId, i) =>
-        relocations.push({
-          playerId,
-          fromPoolIndex: pool.index,
-          toPoolIndex: destinations[i]!.index,
-        }),
-      );
-  }
+  const relocations = attendanceRelocations(state, input.action, pool, remaining, open);
   if (input.action === 'redistribute' && !relocations.length)
     issues.push('No safe redistribution is available.');
   const labels = projectMatchLabels(state);
+  const returnCallMatchIds =
+    lateAddRecovery?.matchIds ??
+    (input.action === 'no_show' && issues.length === 1 ? matchReview.untakenCallIds : []);
   return {
     allowed: !issues.length,
     issues,
-    ...(input.action === 'no_show' && matchReview.untakenCallIds.length > 0 && issues.length === 1
-      ? { returnCallMatchIds: matchReview.untakenCallIds }
-      : {}),
+    ...(returnCallMatchIds.length ? { returnCallMatchIds } : {}),
     requiresExternalAcknowledgement: false,
     requiresRedistributionApproval: Boolean(relocations.length),
     relocations,
@@ -145,6 +151,49 @@ function ordinaryAttendancePreview(
       lifecycle: state.lifecycle,
     }),
   };
+}
+
+function attendanceRelocations(
+  state: TournamentState,
+  action: Input['action'],
+  pool: Pool | undefined,
+  remaining: string[],
+  open: readonly Pool[],
+) {
+  if (
+    !pool ||
+    remaining.length !== 2 ||
+    !['no_show', 'redistribute'].includes(action) ||
+    poolHasCallsOrHistory(state, pool.id)
+  )
+    return [];
+  const targets = open.filter((target) => target.id !== pool.id);
+  const together = targets.find((target) => target.entrantIds.length <= 3);
+  const destinations = together ? [together, together] : targets.slice(0, 2);
+  return destinations.length === 2
+    ? remaining.map((playerId, i) => ({
+        playerId,
+        fromPoolIndex: pool.index,
+        toPoolIndex: destinations[i]!.index,
+      }))
+    : [];
+}
+
+function lateAddCalls(
+  state: TournamentState,
+  { action, poolIndex: reviewedPoolIndex }: Pick<Input, 'action' | 'poolIndex'>,
+  candidates: readonly Pool[],
+  hasPlacementOrOtherBlocker: boolean,
+) {
+  if (action !== 'add' || hasPlacementOrOtherBlocker) return;
+  const reported = new Set(state.reports.map((report) => report.matchId));
+  for (const pool of candidates) {
+    const blocker = poolAttendanceBlocker(state, pool, reported);
+    if (!blocker || typeof blocker !== 'object') continue;
+    if (reviewedPoolIndex === undefined || reviewedPoolIndex === pool.index)
+      return { poolIndex: pool.index, matchIds: blocker.matchIds };
+    return;
+  }
 }
 
 function projectWithdrawal(
