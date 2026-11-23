@@ -140,7 +140,7 @@ function lastSeenChip(row: LeaderboardRow): { text: string; className: string; t
     title:
       row.activityPenalty > 0
         ? `Last seen ${row.lastPlayedDate}. ${row.missedEvents} club nights missed, costing ${Math.round(row.activityPenalty)} points.`
-        : `Last seen ${row.lastPlayedDate}. Inside the grace window, so nothing has been docked.`,
+        : `Last seen ${row.lastPlayedDate}. No attendance deduction.`,
   };
 }
 
