@@ -2,6 +2,12 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.14
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · The organiser guide shows how to start ready finals while other pools are still playing. [#639](https://github.com/ashleylamont/smashclub-seeding/pull/639) · [build 5f91bcb](https://github.com/ashleylamont/smashclub-seeding/commit/5f91bcbc0cae29b7e3a980b6646582f2b0210182)
+
 ## 0.23.13
 
 ### Patch Changes
