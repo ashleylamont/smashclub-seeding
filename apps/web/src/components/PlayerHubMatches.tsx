@@ -155,7 +155,6 @@ export function PlayerHubMatches({
           {playerName && (
             <p>
               {visible.length} {visible.length === 1 ? 'match' : 'matches'} in this view
-              {!closed && ' · station calls first'}
             </p>
           )}
         </div>
