@@ -204,6 +204,42 @@ test('keeps linked identities visible while provider options fail and retry', as
   expect(fixture.unexpected).toEqual([]);
 });
 
+test('keeps an admin account and claimed profile usable when provider options are malformed', async ({
+  page,
+}) => {
+  const fixture = await mockEvent(page, { role: 'admin' });
+  const profile = 'Synthetic approved profile';
+  fixture.responses['me.claims'] = [playerClaim(PLAYER_ID, 'approved', profile)];
+  await page.route('**/api/auth/list-accounts', (route) =>
+    route.fulfill({ json: [{ providerId: 'discord' }] }),
+  );
+  let attempts = 0;
+  await page.route('**/api/auth-options', (route) => {
+    attempts += 1;
+    return route.fulfill({
+      json: attempts === 1 ? { result: { data: [] } } : { credentials: true, providers: [] },
+    });
+  });
+  await page.goto('/me');
+  const failure = page.getByRole('alert').filter({ hasText: 'Couldn’t check' });
+  await expect(failure).toBeVisible();
+  const badge = page.locator('.me-account .chip-accent');
+  const linked = page.getByText('✓ Discord linked');
+  const claimedPlayer = page.getByRole('link', { name: profile });
+  const linkActions = page.getByRole('button', { name: /Link (Discord|Google)/ });
+  await expect(badge).toHaveText('admin');
+  await expect(claimedPlayer).toBeVisible();
+  await expect(linked).toBeVisible();
+  await expect(linkActions).toHaveCount(0);
+  await page.getByRole('button', { name: 'Retry provider options' }).press('Enter');
+  await expect(failure).toHaveCount(0);
+  await expect(badge).toHaveText('admin');
+  await expect(claimedPlayer).toBeVisible();
+  await expect(linked).toBeVisible();
+  await expect(linkActions).toHaveCount(0);
+  expect(fixture.unexpected).toEqual([]);
+});
+
 const PUBLIC_NAME = 'Returning player with an exceptionally long tournament alias';
 
 function publicPlayer(id = PLAYER_ID, verified = false): PlayerData {
