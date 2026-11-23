@@ -33,7 +33,11 @@ for (const theme of ['dark', 'light'] as const)
       const panel = page.getByRole('tabpanel', { name: 'Broadcast', exact: true });
       await panel.getByRole('button', { name: 'Intermission browser sources' }).press('Enter');
       const source = panel.getByRole('link', { name: 'Follow event overlay ↗' });
-      const href = new URLSearchParams({ station: stage.id, presentation: 'event', controls: '0' });
+      const href = new URLSearchParams({
+        station: stage.id,
+        presentation: 'event',
+        controls: 'preview',
+      });
       await expect(source).toHaveAttribute('href', `/overlay/${PLAN_ID}?${href}`);
       await expect(panel.getByText(match.player1Name, { exact: false }).first()).toBeVisible();
       const control = panel.getByRole('region', { name: 'Event-following presentation' });
