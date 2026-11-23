@@ -212,7 +212,7 @@ describe('native doubles through shipped APIs', () => {
       ).toEqual({
         teamName: 'Pair 0',
         members: [
-          { name: member.displayName, character: 'mario' },
+          { name: member.displayName, character: 'mario', profileMains: ['mario', 'luigi'] },
           { name: members[1]!.displayName, character: null },
         ],
       });

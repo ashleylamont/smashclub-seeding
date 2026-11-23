@@ -1,4 +1,5 @@
 import { characterName, isCharacterSlug } from '@smashclub/shared';
+import type { GraphicProfileMains } from './resultGraphicMains';
 import { NEMESIS_MARK_PATHS } from './nemesisMark';
 import {
   FIGHTER_ART_CREDIT,
@@ -17,6 +18,10 @@ const FOOTER = 52;
 const OVERFLOW_HEIGHT = 114;
 const OVERFLOW_COLUMNS = 4;
 const MAX_CANVAS_EDGE = 4096;
+const MAINS_COLUMNS = 3;
+const MAINS_ROW_HEIGHT = 128;
+const MAINS_HEADER = 78;
+const MAINS_FOOTER = 28;
 const ink = '#171619';
 const paper = '#fff4e5';
 const orange = '#ff6847';
@@ -346,17 +351,100 @@ function drawTile(
   ctx.restore();
 }
 
+type ProfileMainsArtwork = {
+  entries: readonly GraphicProfileMains[];
+  icons: ReadonlyMap<string, HTMLCanvasElement>;
+};
+
+function drawProfileMains(
+  ctx: CanvasRenderingContext2D,
+  top: number,
+  height: number,
+  { entries, icons }: ProfileMainsArtwork,
+  includeCredit: boolean,
+) {
+  const contentWidth = WIDTH - 2 * PADDING;
+  const cardWidth = (contentWidth - (MAINS_COLUMNS - 1) * GAP) / MAINS_COLUMNS;
+  ctx.save();
+  ctx.translate(0, top);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = ink;
+  ctx.fillRect(0, 0, WIDTH, height);
+  ctx.fillStyle = orange;
+  ctx.fillRect(PADDING, 2, contentWidth, 3);
+  label(ctx, 'PROFILE MAINS', PADDING, 44, contentWidth, `700 30px ${headings}`, paper);
+
+  entries.forEach(({ place, name, teamName, mains }, index) => {
+    const x = PADDING + (index % MAINS_COLUMNS) * (cardWidth + GAP);
+    const y = 64 + Math.floor(index / MAINS_COLUMNS) * MAINS_ROW_HEIGHT;
+    ctx.fillStyle = '#242024';
+    ctx.fillRect(x, y, cardWidth, MAINS_ROW_HEIGHT - 10);
+    label(ctx, String(place), x + 12, y + 23, 22, `700 17px ${mono}`, orange);
+    const nameX = x + 36;
+    const nameWidth = cardWidth - 48;
+    const fontSize = nameSize(ctx, name, 21, 17, nameWidth);
+    label(ctx, name, nameX, y + 25, nameWidth, `700 ${fontSize}px ${reading}`, paper);
+    if (teamName) label(ctx, teamName, nameX, y + 42, nameWidth, `500 13px ${reading}`, muted);
+
+    const iconSize = 64;
+    mains.forEach((slug, i) => {
+      const left = x + 10 + i * (iconSize + 3);
+      const top = y + 46;
+      ctx.fillStyle = '#352d32';
+      ctx.fillRect(left, top, iconSize, iconSize);
+      const icon = icons.get(slug);
+      if (icon) {
+        const edge = iconSize - 8;
+        const scale = edge / Math.max(icon.width, icon.height);
+        const width = icon.width * scale;
+        const height = icon.height * scale;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(
+          icon,
+          left + (iconSize - width) / 2,
+          top + (iconSize - height) / 2,
+          width,
+          height,
+        );
+      } else {
+        label(
+          ctx,
+          characterName(slug),
+          left + 4,
+          top + 34,
+          iconSize - 8,
+          `700 14px ${reading}`,
+          paper,
+        );
+      }
+    });
+  });
+
+  if (includeCredit) {
+    ctx.textAlign = 'right';
+    label(ctx, FIGHTER_ART_CREDIT, WIDTH - PADDING, height - 18, 440, `500 11px ${reading}`, muted);
+  }
+  ctx.restore();
+}
+
 /** Draw the original Nemesis artwork and result facts into the export. */
 export async function renderResultsPng(
   context: GraphicContext,
   rows: Rows,
   portraits: GraphicPortraits,
   bundled: ReadonlySet<string>,
+  profileMains?: ProfileMainsArtwork,
 ): Promise<Blob | null> {
   const { tiles, height } = layout(rows);
+  const mainsHeight = profileMains
+    ? MAINS_HEADER +
+      Math.ceil(profileMains.entries.length / MAINS_COLUMNS) * MAINS_ROW_HEIGHT +
+      MAINS_FOOTER
+    : 0;
+  const totalHeight = height + mainsHeight;
   // Keep every recorded place even in unusually large pools or ties. Fit older
   // mobile canvas limits by scaling the whole graphic after it exceeds 4096px.
-  const scale = Math.min(2, MAX_CANVAS_EDGE / height);
+  const scale = Math.min(2, MAX_CANVAS_EDGE / totalHeight);
   const fonts = [
     `700 40px ${headings}`,
     `700 20px ${reading}`,
@@ -367,7 +455,7 @@ export async function renderResultsPng(
   await Promise.allSettled(fonts.map((font) => document.fonts.load(font, glyphs)));
   const canvas = document.createElement('canvas');
   canvas.width = Math.ceil(WIDTH * scale);
-  canvas.height = Math.min(MAX_CANVAS_EDGE, Math.ceil(height * scale));
+  canvas.height = Math.min(MAX_CANVAS_EDGE, Math.ceil(totalHeight * scale));
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
   ctx.scale(scale, scale);
@@ -400,5 +488,13 @@ export async function renderResultsPng(
     ctx.textAlign = 'right';
     label(ctx, FIGHTER_ART_CREDIT, WIDTH - PADDING, height - 20, 440, `500 11px ${reading}`, muted);
   }
+  if (profileMains)
+    drawProfileMains(
+      ctx,
+      height,
+      mainsHeight,
+      profileMains,
+      !bundled.size && profileMains.icons.size > 0,
+    );
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 }

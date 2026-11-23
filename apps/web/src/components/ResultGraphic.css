@@ -18,6 +18,15 @@
   object-fit: contain;
 }
 
+.result-graphic-preview .result-graphic-image-with-mains {
+  max-height: none;
+}
+
+.result-graphic-format {
+  display: grid;
+  gap: var(--s1);
+}
+
 .result-graphic-preview p {
   margin: 0;
 }

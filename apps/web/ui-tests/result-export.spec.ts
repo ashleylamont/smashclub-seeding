@@ -282,6 +282,8 @@ for (const theme of ['dark', 'light'] as const)
             {
               name: index === 0 ? '名前 / WIDE 🎮' : `Tag ${index}A`,
               character: ['mario', 'mario', 'link', 'steve'][index] ?? null,
+              ...((organizer || completedDivision) &&
+                index === 0 && { profileMains: ['mario', 'luigi'] }),
             },
             { name: index === 0 ? 'Wide second public tag' : `Tag ${index}B`, character: null },
           ],
@@ -444,6 +446,16 @@ for (const theme of ['dark', 'light'] as const)
               : [],
           );
         await expect(dialog.getByRole('button', { name: 'Customize graphic' })).toHaveCount(0);
+        if (completedDivision) {
+          const divisionPng = await previewBytes(image);
+          const includeMains = dialog.getByRole('switch', { name: 'Include profile mains' });
+          await includeMains.press('Space');
+          await expect(image).toBeVisible();
+          expect((await previewBytes(image)).readUInt32BE(20)).toBeGreaterThan(1332);
+          await includeMains.press('Space');
+          await expect(image).toBeVisible();
+          expect(await previewBytes(image)).toEqual(divisionPng);
+        }
       }
       const preview = await previewBytes(image);
       const filename = testInfo.outputPath('confirmed-results.png');
@@ -486,9 +498,27 @@ for (const theme of ['dark', 'light'] as const)
         await expect(dialog.getByRole('button', { name: 'Clear character artwork' })).toHaveCount(
           0,
         );
-        await expect(dialog.getByRole('combobox', { name: 'Character label' })).toContainText(
-          'Use suggested character',
-        );
+        const character = dialog.getByRole('combobox', { name: 'Character label' });
+        await expect(character).toContainText('Use suggested character');
+        const includeMains = dialog.getByRole('switch', { name: 'Include profile mains' });
+        await includeMains.press('Space');
+        await expect(image).toBeVisible();
+        await chooseOption(character, { label: 'Peach' });
+        await expect(image).toBeVisible();
+        await dialog.getByRole('button', { name: 'Placements in this graphic' }).press('Enter');
+        await expect(
+          dialog.getByText('名前 / WIDE 🎮 (Peach) · Profile mains: Mario, Luigi', {
+            exact: false,
+          }),
+        ).toBeVisible();
+        await chooseOption(character, { label: 'No character label' });
+        await expect(includeMains).toHaveCount(0);
+        await expect(image).toBeVisible();
+        expect((await previewBytes(image)).readUInt32BE(20)).toBe(1332);
+        await chooseOption(character, { label: 'Use suggested character' });
+        await expect(includeMains).toHaveAttribute('aria-checked', 'false');
+        await expect(image).toBeVisible();
+        expect(await previewBytes(image)).toEqual(defaultArtwork);
       }
       await page.keyboard.press('Escape');
       await expect(trigger).toBeFocused();
@@ -611,7 +641,10 @@ test('a live poll preserves the preview even when organiser access and portrait 
   const lowerPool = fixture.snapshot.placements.find(({ division }) => division === 'lower')!;
   const entrant = fixture.snapshot.entrants.find(({ id }) => id === lowerPool.playerId)!;
   Object.assign(entrant, {
-    graphic: { teamName: null, members: [{ name: entrant.name, character: 'link' }] },
+    graphic: {
+      teamName: null,
+      members: [{ name: entrant.name, character: 'link', profileMains: ['link', 'toon-link'] }],
+    },
   });
   const linkPortrait = (url: URL) => bundledPortraitFilename(url) === 'link.png';
   const portraitFailure = page.waitForResponse(
@@ -644,6 +677,7 @@ test('a live poll preserves the preview even when organiser access and portrait 
   const image = dialog.getByRole('img', { name: /Lower · Pool A/ });
   await expect(image).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Customize graphic' })).toHaveCount(0);
+  await expect(dialog.getByRole('switch', { name: 'Include profile mains' })).toHaveCount(0);
   await expect(dialog.getByText(FIGHTER_ART_CREDIT, { exact: true })).toHaveCount(0);
   await expect.poll(() => drawn.includes('Link')).toBe(true);
   expect(drawn).not.toContain(FIGHTER_ART_CREDIT);
@@ -672,5 +706,214 @@ test('a live poll preserves the preview even when organiser access and portrait 
   await trigger.click();
   await dialog.getByRole('button', { name: 'Placements in this graphic' }).click();
   await expect(dialog.getByText(`${refreshedAlias} (Link)`, { exact: false })).toBeVisible();
+  expect(fixture.unexpected).toEqual([]);
+});
+
+function profileMainsFixture(doubles: boolean, includeMains: boolean) {
+  const entrants = [1, 2, 3, 4, 5, 6, 7, 8, 8, 9].map((place, index) => {
+    const names = [
+      index === 0 ? 'Alexandria from Western Sydney たまご 🎮' : `Public Tag ${index}`,
+      index === 0 ? 'The Other Long Public Duo Teammate' : `Doubles Tag ${index}`,
+    ];
+    const mains = [
+      ['samus', 'pikachu', 'link', 'kirby'],
+      ['mario', 'luigi'],
+      ['link'],
+      ['peach', 'daisy'],
+      [],
+      ['ness', 'lucas'],
+      ['fox', 'falco', 'wolf'],
+      ['bowser-jr'],
+      ['link', 'young-link'],
+      ['ganondorf', 'bowser'],
+    ][index]!;
+    const members = [
+      {
+        name: names[0]!,
+        character: index === 0 ? 'bowser' : (mains[0] ?? null),
+        ...((includeMains || place > 8) && { profileMains: mains }),
+      },
+      ...(doubles
+        ? [
+            {
+              name: names[1]!,
+              character: 'mario',
+              ...(includeMains && { profileMains: ['mario', 'luigi'] }),
+            },
+          ]
+        : []),
+    ];
+    return {
+      entryKey: `result-${index}`,
+      name: doubles ? `Team ${index} (${names.join(' / ')})` : names[0]!,
+      place,
+      provisional: false,
+      playerId: null,
+      wins: 2,
+      losses: 1,
+      graphic: { teamName: doubles ? `Team ${index}` : null, members },
+    };
+  });
+  return {
+    name: 'Smash Club Finals',
+    date: '2026-11-06',
+    canonicalSlug: 'profile-mains-fixture',
+    competitionFormat: doubles ? 'doubles' : 'singles',
+    divisions: [],
+    brackets: [
+      {
+        tournamentId: '00000000-0000-4000-8000-000000000002',
+        name: 'Championship',
+        slug: 'profile-mains-fixture',
+        roleSource: 'unclassified',
+        isComplete: true,
+        players: entrants,
+      },
+    ],
+    warnings: [],
+  };
+}
+
+async function originalPngPixels(image: Locator, height: number) {
+  return image.evaluate(async (element: HTMLImageElement, originalHeight) => {
+    await element.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = element.naturalWidth;
+    canvas.height = originalHeight;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(element, 0, 0);
+    const pixelBytes = new Uint8Array(ctx.getImageData(0, 0, canvas.width, canvas.height).data);
+    return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', pixelBytes)));
+  }, height);
+}
+
+for (const theme of ['dark', 'light'] as const)
+  for (const width of [390, 1440])
+    for (const format of ['singles', 'doubles'] as const)
+      test(`${theme} ${width}px opts into ${format} profile mains in the preview and download`, async ({
+        page,
+      }, testInfo) => {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+        await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+        const fixture = await mockEvent(page);
+        const drawn = await captureGraphicText(page);
+        const requestedHeads: string[] = [];
+        page.on('request', (request) => {
+          const path = new URL(request.url()).pathname;
+          if (path.startsWith('/characters/')) requestedHeads.push(path);
+        });
+        fixture.responses['public.eventOverview'] = profileMainsFixture(format === 'doubles', true);
+        const unavailableIcon = theme === 'light' && width === 390 && format === 'singles';
+        if (unavailableIcon)
+          await page.route('**/characters/pikachu.png', (route) => route.fulfill({ status: 404 }));
+        await page.goto('/events/profile-mains-fixture');
+        const trigger = page.getByRole('button', { name: 'Preview results PNG for Championship' });
+        await trigger.focus();
+        await trigger.press('Enter');
+        const dialog = page.getByRole('dialog', { name: 'Results graphic' });
+        const image = dialog.getByRole('img', { name: /Championship/ });
+        const includeMains = dialog.getByRole('switch', { name: 'Include profile mains' });
+        await expect(image).toBeVisible();
+        const defaultBytes = await previewBytes(image);
+        const defaultHeight = defaultBytes.readUInt32BE(20);
+        const defaultPixels = await originalPngPixels(image, defaultHeight);
+        await writeFile(testInfo.outputPath('default.png'), defaultBytes);
+        expect(defaultHeight).toBe(1332);
+        expect(requestedHeads).toEqual([]);
+        await expect(includeMains).toHaveAttribute('aria-checked', 'false');
+        await includeMains.focus();
+        await includeMains.press('Space');
+        await expect(includeMains).toBeFocused();
+        await expect(includeMains).toHaveAttribute('aria-checked', 'true');
+        await expect(image).toBeVisible();
+        const preview = await previewBytes(image);
+        expect(preview.readUInt32BE(16)).toBe(defaultBytes.readUInt32BE(16));
+        expect(preview.readUInt32BE(20)).toBeGreaterThan(defaultHeight);
+        expect(await originalPngPixels(image, defaultHeight)).toEqual(defaultPixels);
+        expect(requestedHeads).toContain('/characters/pikachu.png');
+        expect(requestedHeads).not.toContain('/characters/ganondorf.png');
+        await expect.poll(() => drawn.includes('PROFILE MAINS')).toBe(true);
+        expect(drawn).toContain('Bowser');
+        if (unavailableIcon) {
+          // The appendix preserves the text fallback when an individual stock icon fails.
+          expect(drawn).toContain('Pikachu');
+        }
+        const geometry = await image.evaluate((node: HTMLImageElement) => ({
+          width: node.clientWidth,
+          height: node.clientHeight,
+          expectedHeight: (node.clientWidth * node.naturalHeight) / node.naturalWidth,
+        }));
+        expect(geometry.height).toBeCloseTo(geometry.expectedHeight, 0);
+        expect(geometry.width).toBeGreaterThan(width === 390 ? 310 : 550);
+        expect(
+          await dialog.evaluate(({ scrollWidth, clientWidth }) => scrollWidth <= clientWidth),
+        ).toBe(true);
+        await ready(page);
+        await page.screenshot({ path: testInfo.outputPath('dialog.png') });
+        await dialog.getByRole('button', { name: 'Placements in this graphic' }).press('Enter');
+        await expect(
+          dialog.getByText(
+            'Alexandria from Western Sydney たまご 🎮 (Bowser) · Profile mains: Samus, Pikachu, Link, Kirby',
+            { exact: false },
+          ),
+        ).toBeVisible();
+        if (format === 'doubles')
+          await expect(
+            dialog.getByText(
+              'The Other Long Public Duo Teammate (Mario) · Profile mains: Mario, Luigi',
+              { exact: false },
+            ),
+          ).toBeVisible();
+        await expect(
+          dialog.getByText('Public Tag 8 (Link) · Profile mains: Link, Young Link', {
+            exact: false,
+          }),
+        ).toBeVisible();
+        const downloadButton = dialog.getByRole('button', { name: 'Download PNG ↓' });
+        await downloadButton.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath('placements.png') });
+        if (width === 390)
+          expect(
+            (await new AxeBuilder({ page }).include('.result-graphic-dialog').analyze()).violations,
+          ).toEqual([]);
+        const downloaded = page.waitForEvent('download');
+        await downloadButton.press('Enter');
+        const file = await downloaded;
+        expect(file.suggestedFilename()).toBe(
+          'nemesis-championship-results-with-profile-mains.png',
+        );
+        const path = testInfo.outputPath('profile-mains.png');
+        await file.saveAs(path);
+        expect(await readFile(path)).toEqual(preview);
+        await includeMains.press('Space');
+        await expect(image).toBeVisible();
+        expect(await previewBytes(image)).toEqual(defaultBytes);
+        await includeMains.press('Space');
+        await expect(image).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(trigger).toBeFocused();
+        await trigger.press('Enter');
+        await expect(includeMains).toHaveAttribute('aria-checked', 'false');
+        await expect(image).toBeVisible();
+        expect(await previewBytes(image)).toEqual(defaultBytes);
+        await page.keyboard.press('Escape');
+
+        const svgDownload = page.waitForEvent('download');
+        await page.getByRole('button', { name: 'Download SVG ↓' }).click();
+        const svg = await svgDownload;
+        const svgPath = testInfo.outputPath('results.svg');
+        await svg.saveAs(svgPath);
+        expect(await readFile(svgPath, 'utf8')).not.toMatch(/profile mains|pikachu|<image/i);
+        expect(fixture.unexpected).toEqual([]);
+      });
+
+test('profile mains outside the exported places do not offer a PNG option', async ({ page }) => {
+  const fixture = await mockEvent(page);
+  fixture.responses['public.eventOverview'] = profileMainsFixture(false, false);
+  await page.goto('/events/profile-mains-fixture');
+  await page.getByRole('button', { name: 'Preview results PNG for Championship' }).press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Results graphic' });
+  await expect(dialog.getByRole('img')).toBeVisible();
+  await expect(dialog.getByRole('switch', { name: 'Include profile mains' })).toHaveCount(0);
   expect(fixture.unexpected).toEqual([]);
 });

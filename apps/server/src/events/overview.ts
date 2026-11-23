@@ -164,12 +164,10 @@ export async function loadEventOverview(
   const setRows = await db.select().from(sets).where(inArray(sets.tournamentId, ids));
   const evidence = await archiveCharacterEvidence(db, setRows, runtime);
   const eventCharacters = archiveCharacterLeaders(evidence.values());
-  const participantPresentation = await publicParticipantPresentation(
-    db,
-    participants,
-    true,
+  const participantPresentation = await publicParticipantPresentation(db, participants, {
     eventCharacters,
-  );
+    includeProfileMains: true,
+  });
   const warnings: string[] =
     anchorPlanIds.size > 1
       ? ['This bracket belongs to conflicting event plans; only its own results are shown.']

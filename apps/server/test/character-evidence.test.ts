@@ -64,7 +64,7 @@ it('allows a verified archive participant to add and revise picks, with conflict
       { canonicalName: 'Private Outsider', displayName: 'Outsider' },
     ])
     .returning();
-  await setPlayerCharacters(db, a!.id, ['kirby']);
+  await setPlayerCharacters(db, a!.id, ['kirby', 'jigglypuff', 'ness']);
   const [tournament] = await db
     .insert(tournaments)
     .values({
@@ -162,8 +162,12 @@ it('allows a verified archive participant to add and revise picks, with conflict
   const graphic = async () =>
     (await loadEventOverview(db, tournament!.challongeSlug, runtime))!.brackets[0]!.players.find(
       ({ playerId }) => playerId === a!.id,
-    )?.graphic?.members[0]?.character;
-  expect(await graphic()).toBe('fox');
+    )?.graphic?.members[0];
+  expect(await graphic()).toEqual({
+    name: 'Alex',
+    character: 'fox',
+    profileMains: ['kirby', 'jigglypuff', 'ness'],
+  });
   const publicSet = (await caller(null).public.tournament({
     slug: tournament!.challongeSlug,
   }))!.sets.find(({ id }) => id === played!.id)!;
@@ -186,10 +190,10 @@ it('allows a verified archive participant to add and revise picks, with conflict
   );
   const revised = { ...input, picks: [{ playerId: a!.id, characters: ['falco'] }] };
   await reportPlayedCharacters(db, other, runtime, revised);
-  expect(await graphic()).toBe('kirby');
+  expect(await graphic()).toMatchObject({ character: 'kirby' });
   await reportPlayedCharacters(db, player, runtime, revised);
-  expect(await graphic()).toBe('falco');
-  expect(await charactersForPlayer(db, a!.id)).toEqual(['kirby']);
+  expect(await graphic()).toMatchObject({ character: 'falco' });
+  expect(await charactersForPlayer(db, a!.id)).toEqual(['kirby', 'jigglypuff', 'ness']);
   expect((await db.select().from(sets).where(eq(sets.id, played!.id)))[0]).toEqual(played);
 });
 
