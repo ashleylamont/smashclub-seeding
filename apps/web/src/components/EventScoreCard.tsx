@@ -17,7 +17,7 @@ import type { SetCharacterPick } from '@smashclub/shared';
 import { scoreReportPlayers, type ScoreReportPlayer } from '../lib/scoreReportPlayers';
 import { SetCharacterFields } from './SetCharacterFields';
 import { ReportedCharacters } from './ReportedCharacters';
-import { PlayerProfileName } from './PlayerProfilePreview';
+import { EventEntrantName } from './PlayerProfilePreview';
 import {
   scoreReportDraftKey,
   useScoreReportDraft,
@@ -46,6 +46,7 @@ type EventScoreCardProps = {
   lateReport?: React.ReactNode;
   recordedOnly?: boolean;
   showPlayerPreviews?: boolean;
+  profileMemberNames?: Readonly<Record<string, string>>;
 };
 
 export function EventScoreCard(props: EventScoreCardProps) {
@@ -61,19 +62,43 @@ function ScoreCardTitle({
   match,
   presentation,
   showPlayerPreviews,
+  profileMemberNames,
 }: {
   match: EventScoreCardProps['match'];
   presentation: ReturnType<typeof matchPresentation>;
   showPlayerPreviews?: boolean;
+  profileMemberNames?: Readonly<Record<string, string>>;
 }) {
-  if (!showPlayerPreviews || !['scheduled', 'played'].includes(presentation.kind))
+  if (
+    (!showPlayerPreviews && !profileMemberNames) ||
+    !['scheduled', 'played'].includes(presentation.kind)
+  )
     return <h3>{presentation.title}</h3>;
 
   return (
-    <h3 className="ops-match-player-names" aria-label={presentation.title}>
-      <PlayerProfileName playerId={match.player1Id} name={match.player1Name || 'Player'} />
-      <span>{' vs '}</span>
-      <PlayerProfileName playerId={match.player2Id} name={match.player2Name || 'Opponent'} />
+    <h3
+      className={
+        profileMemberNames
+          ? 'ops-match-player-names ops-match-doubles-names'
+          : 'ops-match-player-names'
+      }
+      aria-label={presentation.title}
+    >
+      <EventEntrantName
+        entrantId={match.player1Id}
+        name={match.player1Name || 'Player'}
+        singlesPreview={showPlayerPreviews}
+        memberIds={match.player1MemberIds}
+        memberNames={profileMemberNames}
+      />
+      <span className="ops-match-versus">{' vs '}</span>
+      <EventEntrantName
+        entrantId={match.player2Id}
+        name={match.player2Name || 'Opponent'}
+        singlesPreview={showPlayerPreviews}
+        memberIds={match.player2MemberIds}
+        memberNames={profileMemberNames}
+      />
     </h3>
   );
 }
@@ -95,6 +120,7 @@ function ScoreCard({
   lateReport,
   recordedOnly = false,
   showPlayerPreviews,
+  profileMemberNames,
 }: EventScoreCardProps) {
   const card = useRef<HTMLElement>(null);
   const enabled = reportingEnabled && !recordedOnly;
@@ -148,6 +174,7 @@ function ScoreCard({
         match={match}
         presentation={presentation}
         showPlayerPreviews={showPlayerPreviews}
+        profileMemberNames={profileMemberNames}
       />
       {qualification && presentation.kind === 'scheduled' && match.status !== 'blocked' && (
         <p role="status">{qualification} Your recorded pairing is unchanged.</p>

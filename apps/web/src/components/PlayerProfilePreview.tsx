@@ -16,6 +16,64 @@ export function PlayerProfileName({ playerId, name }: { playerId?: string | null
   );
 }
 
+const playerIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type MemberNames = Readonly<Record<string, string>>;
+
+function publicDoublesMembers(
+  name: string,
+  entrantId: string | null | undefined,
+  memberIds: readonly string[] | undefined,
+  names: MemberNames | undefined,
+) {
+  if (!entrantId || !names || memberIds?.length !== 2) return;
+  const [first, second] = memberIds;
+  if (!first || !second || first === second) return;
+  const members = [first, second].flatMap((id) => {
+    const alias = Object.hasOwn(names, id) ? names[id] : undefined;
+    return id !== entrantId && playerIdPattern.test(id) && alias && alias !== 'Player'
+      ? [{ id, name: alias }]
+      : [];
+  });
+  if (members.length !== 2) return;
+
+  // The public snapshot supplies member identity separately. Match only the
+  // rendered suffix to preserve the optional team label and source fallbacks.
+  const pair = members.map((member) => member.name).join(' / ');
+  const suffix = ` (${pair})`;
+  if (name === pair) return { members, teamName: '' };
+  if (name.endsWith(suffix)) return { members, teamName: name.slice(0, -suffix.length) };
+}
+
+export function EventEntrantName({
+  entrantId,
+  name,
+  singlesPreview,
+  memberIds,
+  memberNames,
+}: {
+  entrantId?: string | null;
+  name: string;
+  singlesPreview?: boolean;
+  memberIds?: readonly string[];
+  memberNames?: MemberNames;
+}) {
+  const doubles = publicDoublesMembers(name, entrantId, memberIds, memberNames);
+  if (!doubles)
+    return <PlayerProfileName playerId={singlesPreview ? entrantId : null} name={name} />;
+
+  return (
+    <span className="event-entrant-pair">
+      {doubles.teamName && <span>{doubles.teamName}</span>}
+      <span className="event-entrant-members">
+        {doubles.members.map(({ id, name }) => (
+          <PlayerProfileName key={id} playerId={id} name={name} />
+        ))}
+      </span>
+    </span>
+  );
+}
+
 export function PlayerProfilePreview({
   playerId,
   name,

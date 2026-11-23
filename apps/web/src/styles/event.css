@@ -42,6 +42,14 @@
   align-items: center;
   gap: var(--s1);
 }
+.ops-match-doubles-names {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  overflow-wrap: anywhere;
+}
+.ops-match-doubles-names > .ops-match-versus {
+  white-space: nowrap;
+}
 .ops-match-meta {
   display: flex;
   justify-content: space-between;

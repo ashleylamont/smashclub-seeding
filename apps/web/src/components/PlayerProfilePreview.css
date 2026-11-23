@@ -39,3 +39,19 @@
   color: var(--text-h);
   font-size: var(--fs-lg);
 }
+
+.event-entrant-pair {
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr);
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+}
+
+.event-entrant-members {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--s1);
+}
