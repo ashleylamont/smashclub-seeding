@@ -1,5 +1,5 @@
 import { Button } from '../components/ui/Button';
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { trpc } from '../lib/trpc';
@@ -32,14 +32,23 @@ function RecapRoute({ slug }: { slug: string }) {
     queryFn: () => trpc.public.recap.query({ slug }),
   });
   const [retrying, setRetrying] = useState(false);
-  const retryButton = useRef<HTMLButtonElement>(null);
   const restoreFocus = useRef(false);
+  const rememberRetryFocus = useCallback((button: HTMLButtonElement | null) => {
+    if (!button) return;
+    return () => {
+      restoreFocus.current = document.activeElement === button;
+    };
+  }, []);
+
+  // Refetching an uncached error resets the query to pending, including when
+  // the browser reconnects without a button press.
+  const hasLoadError = query.isError || (query.isPending && query.errorUpdateCount > 0);
+  const recovering = retrying || (hasLoadError && query.isFetching);
 
   async function retry() {
-    if (retrying) return;
+    if (recovering) return;
     setRetrying(true);
-    const result = await query.refetch({ cancelRefetch: false });
-    restoreFocus.current = !result.isError && document.activeElement === retryButton.current;
+    await query.refetch({ cancelRefetch: false });
     setRetrying(false);
   }
 
@@ -49,21 +58,20 @@ function RecapRoute({ slug }: { slug: string }) {
     target.focus();
   }
 
-  // A refetch resets an uncached query to pending. Keep the same button mounted
-  // until the retry finishes so keyboard focus survives that transition.
-  if (retrying || query.isError)
+  // Keep focus on Retry through refetch and mount its polite live region
+  // before the pending message changes.
+  if (recovering || hasLoadError)
     return (
       <>
-        {retrying ? (
-          <Notice live={false}>
-            <LoadingState>Retrying recap…</LoadingState>
-          </Notice>
-        ) : (
-          <Notice tone="danger">Could not load this recap.</Notice>
-        )}
+        <Notice tone={recovering ? 'info' : 'danger'} live={false}>
+          {!recovering && <span role="alert">Could not load this recap.</span>}
+          <div className={recovering ? undefined : 'visually-hidden'}>
+            <LoadingState>{recovering ? 'Retrying recap…' : ''}</LoadingState>
+          </div>
+        </Notice>
         <Button
-          ref={retryButton}
-          aria-disabled={retrying || undefined}
+          ref={rememberRetryFocus}
+          aria-disabled={recovering || undefined}
           onClick={() => void retry()}
         >
           Retry

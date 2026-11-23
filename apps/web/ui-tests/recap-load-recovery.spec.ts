@@ -61,6 +61,36 @@ const serviceError = {
   },
 };
 
+async function mockRecapRecovery(page: Page, outcome: RecapData | null = recap) {
+  const fixture = await mockEvent(page);
+  fixture.queryResponses.set('public.recap', (input) => {
+    expect(input).toEqual({ slug });
+    return outcome;
+  });
+
+  let serviceAvailable = false;
+  let releaseRetry!: () => void;
+  const retryReleased = new Promise<void>((resolve) => {
+    releaseRetry = resolve;
+  });
+  await page.route('**/api/trpc/public.recap*', async (route) => {
+    if (serviceAvailable) {
+      await retryReleased;
+      await route.fallback();
+      return;
+    }
+    const batched = new URL(route.request().url()).searchParams.has('batch');
+    await route.fulfill({ status: 500, json: batched ? [serviceError] : serviceError });
+  });
+  return {
+    fixture,
+    restoreService() {
+      serviceAvailable = true;
+    },
+    releaseRetry,
+  };
+}
+
 async function reviewRoute(page: Page, testInfo: TestInfo, image: string) {
   await ready(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -78,41 +108,30 @@ for (const theme of ['dark', 'light'] as const) {
     }, testInfo) => {
       await page.setViewportSize({ width, height: 844 });
       await page.emulateMedia({ colorScheme: theme });
-      const fixture = await mockEvent(page);
-      fixture.queryResponses.set('public.recap', (input) => {
-        expect(input).toEqual({ slug });
-        return recap;
-      });
-
-      let serviceAvailable = false;
-      let releaseRetry!: () => void;
-      const retryReleased = new Promise<void>((resolve) => {
-        releaseRetry = resolve;
-      });
-      await page.route('**/api/trpc/public.recap*', async (route) => {
-        if (serviceAvailable) {
-          await retryReleased;
-          await route.fallback();
-          return;
-        }
-        const batched = new URL(route.request().url()).searchParams.has('batch');
-        await route.fulfill({ status: 500, json: batched ? [serviceError] : serviceError });
-      });
+      const { fixture, restoreService, releaseRetry } = await mockRecapRecovery(page);
       await page.goto(path);
 
       const main = page.getByRole('main');
       await expect(main.getByRole('alert')).toHaveText('Could not load this recap.');
       await expect(main.getByText(serviceError.error.message)).toHaveCount(0);
+      const status = main.getByRole('status');
+      await expect(status).toHaveText('');
+      const originalStatus = await status.elementHandle();
       const retry = main.getByRole('button', { name: 'Retry' });
       await main.focus();
       await page.keyboard.press('Tab');
       await expect(retry).toBeFocused();
       await reviewRoute(page, testInfo, 'recap-load-error');
 
-      serviceAvailable = true;
-      await page.keyboard.press('Enter');
+      restoreService();
       try {
-        await expect(main.getByRole('status')).toHaveText('Retrying recap…');
+        await page.keyboard.press('Enter');
+        await expect(status).toHaveText('Retrying recap…');
+        expect(await status.evaluate((node, original) => node === original, originalStatus)).toBe(
+          true,
+        );
+        await expect(status).toBeInViewport();
+        await expect(main.getByRole('alert')).toHaveCount(0);
         await expect(retry).toBeFocused();
         await expect(retry).toBeDisabled();
       } finally {
@@ -133,6 +152,37 @@ for (const theme of ['dark', 'light'] as const) {
     });
   }
 }
+
+test('reconnecting keeps focus until the shared recap result is known', async ({
+  context,
+  page,
+}) => {
+  const { fixture, restoreService, releaseRetry } = await mockRecapRecovery(page, null);
+  await page.goto(path);
+  const main = page.getByRole('main');
+  const retry = main.getByRole('button', { name: 'Retry' });
+  await expect(retry).toBeEnabled();
+  await main.focus();
+  await page.keyboard.press('Tab');
+  await expect(retry).toBeFocused();
+
+  try {
+    await context.setOffline(true);
+    await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+    restoreService();
+    await context.setOffline(false);
+    await expect(main.getByRole('status')).toHaveText('Retrying recap…');
+    await expect(retry).toBeFocused();
+    await expect(retry).toBeDisabled();
+  } finally {
+    releaseRetry();
+  }
+
+  await expect(main.getByRole('heading', { name: 'Recap not found' })).toBeVisible();
+  await expect(main.getByRole('link', { name: 'Browse tournament results' })).toBeFocused();
+  await expect(page).toHaveURL(new URL(path, page.url()).toString());
+  expect(fixture.unexpected).toEqual([]);
+});
 
 test('missing shared recap links to tournament results', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
