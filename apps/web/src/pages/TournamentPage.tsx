@@ -42,7 +42,6 @@ function TournamentDetail({
   headingRef,
   refreshNotice,
 }: { data: TournamentData } & ArchivePageFeedback) {
-  const reporter = useCharacterReporter();
   const queryClient = useQueryClient();
   const now = useNow();
   const isLive = isLiveNow(data, now);
@@ -254,95 +253,142 @@ function TournamentDetail({
         {data.sets.length === 0 ? (
           <p className="muted">No sets yet.</p>
         ) : (
-          <div className="table-scroll" role="region" aria-label="Tournament sets" tabIndex={0}>
-            <table className="data-table sets-table">
-              <thead>
-                <tr>
-                  <th>Stage</th>
-                  <th title="Winners rounds are W1, W2…; losers rounds are L1, L2…">Round</th>
-                  <th>Set</th>
-                  <th className="col-fill">Match</th>
-                  <th>Score</th>
-                  <th>Status</th>
-                  <th>Reported</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleSets.map((set) => {
-                  const round =
-                    set.round != null && set.resultStage !== 'group'
-                      ? roundLabel(set.round)
-                      : (set.round ?? '—');
-                  const state =
-                    set.unplayedOutcome && set.state === 'complete'
-                      ? { label: 'Complete', hint: 'Resolved without a played score.' }
-                      : setStateLabel(set.state);
-                  return (
-                    <tr
-                      key={set.id}
-                      className={set.excludedFromRatings ? 'set-excluded' : undefined}
-                    >
-                      <td>
-                        {set.resultStage === 'group'
-                          ? 'Pool'
-                          : set.resultStage === 'final'
-                            ? 'Bracket'
-                            : '—'}
-                      </td>
-                      <td className="mono">{finalsSetIds.has(set.id) ? 'Finals' : round}</td>
-                      <td
-                        className={set.displayLabel ? 'mono set-structural-label' : 'mono'}
-                        title={set.displayLabel ? (set.identifier ?? undefined) : undefined}
-                      >
-                        {set.displayLabel ?? set.identifier ?? '—'}
-                      </td>
-                      <td>
-                        <SetLine set={set} previewIds={previewIds} />
-                        {set.charactersPlayed && (
-                          <>
-                            <ReportedCharacters
-                              picks={set.charactersPlayed.picks}
-                              players={set.charactersPlayed.players}
-                            />
-                            {set.charactersPlayed.players.some(({ id }) =>
-                              reporter.playerIds.has(id),
-                            ) && (
-                              <PlayedCharacterReport
-                                key={reporter.identity}
-                                target={{ kind: 'archive', setId: set.id }}
-                                players={set.charactersPlayed.players}
-                              />
-                            )}
-                          </>
-                        )}
-                        {set.excludedFromRatings && (
-                          <span
-                            className="chip excluded-chip"
-                            title={
-                              set.excludedByResultsMode
-                                ? 'Group results are ignored by this tournament’s Final stage only setting'
-                                : 'Not counted towards ratings — a walkover, a disqualification, or an admin exclusion'
-                            }
-                          >
-                            {set.excludedByResultsMode ? 'group ignored' : 'excluded'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="mono">
-                        {set.unplayedOutcome ? '—' : scoreCell(set.scoresCsv)}
-                      </td>
-                      <td title={state.hint}>{state.label}</td>
-                      <td className="mono">
-                        {set.completedAt ? formatDateTime(set.completedAt) : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <TournamentSetsTable
+            sets={visibleSets}
+            finalsSetIds={finalsSetIds}
+            previewIds={previewIds}
+          />
         )}
       </div>
+    </div>
+  );
+}
+
+function TournamentSetsTable({
+  sets,
+  finalsSetIds,
+  previewIds,
+}: {
+  sets: readonly TournamentSet[];
+  finalsSetIds: ReadonlySet<string>;
+  previewIds: ReadonlyMap<string, string>;
+}) {
+  const reporter = useCharacterReporter();
+  return (
+    <div
+      className="table-scroll tournament-sets-scroll"
+      role="region"
+      aria-label="Tournament sets"
+      tabIndex={0}
+    >
+      <table className="data-table sets-table">
+        <thead>
+          <tr>
+            <th scope="col">Stage</th>
+            <th scope="col" title="Winners rounds are W1, W2…; losers rounds are L1, L2…">
+              Round
+            </th>
+            <th scope="col">Set</th>
+            <th scope="col" className="col-fill">
+              Match
+            </th>
+            <th scope="col">Score</th>
+            <th scope="col">Status</th>
+            <th scope="col">Reported</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sets.map((set) => {
+            const round =
+              set.round != null && set.resultStage !== 'group'
+                ? roundLabel(set.round)
+                : (set.round ?? '—');
+            const state =
+              set.unplayedOutcome && set.state === 'complete'
+                ? { label: 'Complete', hint: 'Resolved without a played score.' }
+                : setStateLabel(set.state);
+            return (
+              <tr key={set.id} className={set.excludedFromRatings ? 'set-excluded' : undefined}>
+                <td className="set-field-stage">
+                  <span className="set-field-label" aria-hidden="true">
+                    Stage
+                  </span>
+                  {set.resultStage === 'group'
+                    ? 'Pool'
+                    : set.resultStage === 'final'
+                      ? 'Bracket'
+                      : '—'}
+                </td>
+                <td className="mono set-field-round">
+                  <span className="set-field-label" aria-hidden="true">
+                    Round
+                  </span>
+                  {finalsSetIds.has(set.id) ? 'Finals' : round}
+                </td>
+                <td
+                  className={`mono set-field-identifier${set.displayLabel ? ' set-structural-label' : ''}`}
+                  title={set.displayLabel ? (set.identifier ?? undefined) : undefined}
+                >
+                  <span className="set-field-label" aria-hidden="true">
+                    Set
+                  </span>
+                  {set.displayLabel ?? set.identifier ?? '—'}
+                </td>
+                <td className="set-field-match">
+                  <SetLine set={set} previewIds={previewIds} />
+                  {set.charactersPlayed && (
+                    <>
+                      <ReportedCharacters
+                        picks={set.charactersPlayed.picks}
+                        players={set.charactersPlayed.players}
+                      />
+                      {set.charactersPlayed.players.some(({ id }) =>
+                        reporter.playerIds.has(id),
+                      ) && (
+                        <PlayedCharacterReport
+                          key={reporter.identity}
+                          target={{ kind: 'archive', setId: set.id }}
+                          players={set.charactersPlayed.players}
+                        />
+                      )}
+                    </>
+                  )}
+                  {set.excludedFromRatings && (
+                    <span
+                      className="chip excluded-chip"
+                      title={
+                        set.excludedByResultsMode
+                          ? 'Group results are ignored by this tournament’s Final stage only setting'
+                          : 'Not counted towards ratings — a walkover, a disqualification, or an admin exclusion'
+                      }
+                    >
+                      {set.excludedByResultsMode ? 'group ignored' : 'excluded'}
+                    </span>
+                  )}
+                </td>
+                <td className="mono set-field-score">
+                  <span className="set-field-label" aria-hidden="true">
+                    Score
+                  </span>
+                  {set.unplayedOutcome ? '—' : scoreCell(set.scoresCsv)}
+                </td>
+                <td className="set-field-status" title={state.hint}>
+                  <span className="set-field-label" aria-hidden="true">
+                    Status
+                  </span>
+                  {state.label}
+                </td>
+                <td className="mono set-field-reported">
+                  <span className="set-field-label" aria-hidden="true">
+                    Reported
+                  </span>
+                  {set.completedAt ? formatDateTime(set.completedAt) : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
