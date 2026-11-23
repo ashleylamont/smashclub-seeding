@@ -1,10 +1,12 @@
 import { Select, SelectItem } from './ui/Select';
 import { Input } from './ui/Input';
 import { Button } from './ui/Button';
+import { LoadingState, Notice } from './ui/Feedback';
+import { useQuery } from '@tanstack/react-query';
+import { trpc } from '../lib/trpc';
 import { useCallback, useMemo, useState } from 'react';
 import {
   CartesianGrid,
-  LabelList,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -16,7 +18,7 @@ import type { RatingHistoryData } from '../lib/apiTypes';
 import './RatingsOverTime.css';
 
 interface RatingsOverTimeProps {
-  history: RatingHistoryData;
+  players: RatingHistoryData['players'];
 }
 
 /**
@@ -56,11 +58,11 @@ type YMode = 'rating' | 'cautious';
 
 interface Snapshot {
   label: string;
-  index: number;
-  [playerId: string]: string | number | null;
+  values: Record<string, number>;
+  attendance: Record<string, boolean>;
 }
 
-export function RatingsOverTime({ history }: RatingsOverTimeProps) {
+export function RatingsOverTime({ players }: RatingsOverTimeProps) {
   const [yMode, setYMode] = useState<YMode>('rating');
   const [search, setSearch] = useState('');
 
@@ -71,7 +73,7 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
    */
   const [slots, setSlots] = useState<(string | null)[]>(() => {
     const initial: (string | null)[] = Array.from({ length: MAX_SERIES }, () => null);
-    history.players.slice(0, DEFAULT_SELECTION).forEach((player, i) => {
+    players.slice(0, DEFAULT_SELECTION).forEach((player, i) => {
       initial[i] = player.playerId;
     });
     return initial;
@@ -84,7 +86,13 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
         .filter((entry): entry is { playerId: string; slot: number } => entry !== null),
     [slots],
   );
-  const selectedIds = useMemo(() => new Set(selected.map((s) => s.playerId)), [selected]);
+  const playerIds = useMemo(() => selected.map(({ playerId }) => playerId).sort(), [selected]);
+  const selectedIds = useMemo(() => new Set(playerIds), [playerIds]);
+  const nightly = useQuery({
+    queryKey: ['ratingNightHistory', playerIds],
+    queryFn: () => trpc.public.ratingNightHistory.query({ playerIds }),
+    enabled: playerIds.length > 0,
+  });
   const full = selected.length >= MAX_SERIES;
 
   const toggle = useCallback((playerId: string) => {
@@ -103,77 +111,39 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
     });
   }, []);
 
-  const nameById = useMemo(
-    () => new Map(history.players.map((p) => [p.playerId, p.name])),
-    [history.players],
-  );
+  const nameById = useMemo(() => new Map(players.map((p) => [p.playerId, p.name])), [players]);
 
   const searchResults = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return [];
-    return history.players.filter((p) => p.name.toLowerCase().includes(query)).slice(0, 8);
-  }, [history.players, search]);
+    return players.filter((p) => p.name.toLowerCase().includes(query)).slice(0, 8);
+  }, [players, search]);
 
   const chartData = useMemo(() => {
-    if (history.events.length === 0 || selected.length === 0) return [];
-    const value = (rating: number, rd: number) => (yMode === 'cautious' ? rating - 2 * rd : rating);
-
-    const state = new Map<string, { rating: number; rd: number }>();
-    const snapshots: Snapshot[] = [];
-
-    const takeSnapshot = (label: string, index: number) => {
-      const snapshot: Snapshot = { label, index };
-      for (const { playerId } of selected) {
-        const s = state.get(playerId);
-        snapshot[playerId] = s ? value(s.rating, s.rd) : null;
-      }
-      snapshots.push(snapshot);
-    };
-
-    const byNight = new Map<string, RatingHistoryData['events']>();
-    for (const event of history.events) {
-      const list = byNight.get(event.eventKey) ?? [];
-      list.push(event);
-      byNight.set(event.eventKey, list);
-    }
-    let index = 0;
-    for (const [eventKey, events] of byNight) {
-      for (const event of events)
-        state.set(event.playerId, { rating: event.postRating, rd: event.postRd });
-      takeSnapshot(eventKey, index++);
-    }
-    return snapshots;
-  }, [history.events, selected, yMode]);
-
-  /** Last snapshot index at which each series has a value, for direct labels. */
-  const lastIndexOf = useMemo(() => {
-    const map = new Map<string, number>();
-    chartData.forEach((snapshot, i) => {
-      for (const { playerId } of selected) {
-        if (snapshot[playerId] != null) map.set(playerId, i);
-      }
-    });
-    return map;
-  }, [chartData, selected]);
-
-  /** Direct labels only while few enough lines that names will not collide. */
-  const directLabels = selected.length <= 4;
-
-  if (history.events.length === 0) {
-    return (
-      <section className="ratings-over-time section">
-        <h2>Ratings over time</h2>
-        <p className="no-data">No rating history yet — sync a tournament to get started.</p>
-      </section>
+    if (!nightly.data) return [];
+    const byNight = new Map(
+      nightly.data.eventKeys.map((label): [string, Snapshot] => [
+        label,
+        { label, values: {}, attendance: {} },
+      ]),
     );
-  }
+    for (const { eventKey, playerId, postRating, postRd, played } of nightly.data.points) {
+      const night = byNight.get(eventKey)!;
+      night.values[playerId] = yMode === 'cautious' ? postRating - 2 * postRd : postRating;
+      night.attendance[playerId] = played;
+    }
+    return [...byNight.values()];
+  }, [nightly.data, yMode]);
 
   return (
     <section className="ratings-over-time section">
       <h2>Ratings over time</h2>
       <p className="muted chart-caption">
-        Compare up to {MAX_SERIES} players. Each keeps its colour and dash pattern while selected,
-        so removing one never recolours the rest.
+        Compare up to {MAX_SERIES} players. Each estimate uses results through that club night.
+        {Boolean(nightly.data?.points.length) &&
+          (nightly.data?.mode === 'played'
+            ? ' Showing the available played-night estimates.'
+            : ' Estimates include missed nights.')}
       </p>
 
       <div className="chart-controls">
@@ -253,11 +223,23 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
 
       {selected.length === 0 ? (
         <p className="no-data">No players selected.</p>
+      ) : nightly.isPending ? (
+        <LoadingState>Loading night estimates…</LoadingState>
+      ) : nightly.isError ? (
+        <Notice tone="danger">
+          Night estimates could not be loaded.{' '}
+          <Button variant="plain" className="link-button" onClick={() => void nightly.refetch()}>
+            Try again
+          </Button>
+        </Notice>
+      ) : !nightly.data.points.length ? (
+        <p className="no-data">No night estimates for these players.</p>
       ) : (
         <ResponsiveContainer width="100%" height={380}>
           <LineChart
             data={chartData}
-            margin={{ top: 8, right: directLabels ? 96 : 16, bottom: 4, left: 0 }}
+            margin={{ top: 8, right: 16, bottom: 4, left: 0 }}
+            aria-label="Player estimates by club night"
           >
             <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
             <XAxis
@@ -281,18 +263,23 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
             <Tooltip
               cursor={{ stroke: 'var(--border-strong)' }}
               content={({ active, payload, label }) => {
-                if (!active || !payload || payload.length === 0) return null;
-                const sorted = [...payload]
+                if (!active || typeof label !== 'string') return null;
+                const sorted = [...(payload ?? [])]
                   .filter((p) => p.value != null)
                   .sort((a, b) => (b.value as number) - (a.value as number));
+                const night = chartData.find((point) => point.label === label);
                 return (
-                  <div className="custom-tooltip ratings-tooltip">
+                  <div className="custom-tooltip ratings-tooltip" role="status">
                     <p className="tooltip-label">{label}</p>
+                    {sorted.length === 0 && <p>No recorded estimates for these players.</p>}
                     {sorted.map((entry) => (
-                      <p key={entry.dataKey as string} className="tooltip-row">
+                      <p key={entry.name as string} className="tooltip-row">
                         <span className="tooltip-swatch" style={{ background: entry.color }} />
                         <span className="tooltip-name">
-                          {nameById.get(entry.dataKey as string) ?? '?'}
+                          {nameById.get(entry.name as string) ?? '?'}
+                          {night?.attendance[entry.name as string] === false && (
+                            <span className="tooltip-attendance">Missed night</span>
+                          )}
                         </span>
                         <span className="num">{(entry.value as number).toFixed(0)}</span>
                       </p>
@@ -304,40 +291,16 @@ export function RatingsOverTime({ history }: RatingsOverTimeProps) {
             {selected.map(({ playerId, slot }) => (
               <Line
                 key={playerId}
-                type="monotone"
-                dataKey={playerId}
+                type="linear"
+                dataKey={`values.${playerId}`}
                 stroke={SERIES_SLOTS[slot]}
                 name={playerId}
-                dot={false}
+                dot={{ r: 2, fill: SERIES_SLOTS[slot], strokeWidth: 0 }}
                 activeDot={{ r: 4, fill: SERIES_SLOTS[slot], stroke: 'var(--bg)', strokeWidth: 2 }}
-                connectNulls
                 strokeWidth={2}
                 strokeDasharray={SERIES_DASH[slot]}
                 isAnimationActive={false}
-              >
-                {directLabels && (
-                  <LabelList
-                    dataKey={playerId}
-                    content={(props: {
-                      index?: number;
-                      x?: number | string;
-                      y?: number | string;
-                    }) => {
-                      if (props.index !== lastIndexOf.get(playerId)) return null;
-                      return (
-                        <text
-                          x={Number(props.x) + 8}
-                          y={Number(props.y) + 4}
-                          fill={SERIES_SLOTS[slot]}
-                          fontSize={11}
-                        >
-                          {nameById.get(playerId) ?? ''}
-                        </text>
-                      );
-                    }}
-                  />
-                )}
-              </Line>
+              />
             ))}
           </LineChart>
         </ResponsiveContainer>

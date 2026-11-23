@@ -19,6 +19,7 @@ import {
 import { eventKeyOf, type WhrNightRating } from '@smashclub/engine';
 import { includesResultStage, publicPlayerName, unplayedResultOutcome } from '@smashclub/shared';
 import { latestRecomputeId } from '../../recompute/recompute';
+import { readRatingNightHistory } from '../../recompute/ratingNightHistory';
 import { readWhrResultImpact } from '../../recompute/whrResultImpact';
 import { getRatingSettings } from '../../settings';
 import { charactersByPlayer, charactersForPlayer } from '../../players/characters';
@@ -336,7 +337,7 @@ export const publicRouter = router({
     .input(z.object({ playerId: z.uuid(), setId: z.uuid(), recomputeId: z.uuid() }))
     .query(({ ctx, input }) => readWhrResultImpact(ctx.db, input)),
 
-  /** Full rating history for every ranked player (the RatingsOverTime chart). */
+  /** Played-set history for rankings form and the player list for rating comparisons. */
   ratingHistory: publicProcedure.query(async ({ ctx }) => {
     const recomputeId = await latestRecomputeId(ctx.db);
     if (!recomputeId) return { events: [], players: [] };
@@ -379,6 +380,11 @@ export const publicRouter = router({
       })),
     };
   }),
+
+  /** Night estimates for the chart's selected players, including nights they missed. */
+  ratingNightHistory: publicProcedure
+    .input(z.object({ playerIds: z.array(z.uuid()).min(1).max(8) }))
+    .query(({ ctx, input }) => readRatingNightHistory(ctx.db, input.playerIds)),
 
   tournaments: publicProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db.select().from(tournaments).orderBy(desc(tournaments.eventDate));
