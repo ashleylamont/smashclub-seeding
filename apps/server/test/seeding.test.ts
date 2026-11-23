@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
-import { playerRatings, seedingRuns, tournaments, type Db, reviewItems } from '@smashclub/db';
+import { and, eq } from 'drizzle-orm';
+import {
+  playerRatings,
+  recomputes,
+  reviewItems,
+  seedingRuns,
+  tournaments,
+  type Db,
+} from '@smashclub/db';
 import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
 import { latestRecomputeId, runRecompute } from '../src/recompute/recompute';
 import {
@@ -111,6 +118,61 @@ describe('seeding workbench', () => {
       if (!entry.playerId) continue;
       expect(entry.autoScore).toBeCloseTo(byPlayer.get(entry.playerId)!.conservativeRating, 9);
     }
+  });
+
+  it('reads the exact rating snapshot behind an existing seed draft after a recompute', async () => {
+    const upcomingId = await setupRatedAndUpcoming();
+    const originalId = (await latestRecomputeId(db))!;
+    const publishedAt = new Date('2025-01-11T01:15:00.000Z');
+    await db
+      .update(recomputes)
+      .set({ finishedAt: publishedAt })
+      .where(eq(recomputes.id, originalId));
+    const [ratedPlayer] = await db
+      .select({ playerId: playerRatings.playerId })
+      .from(playerRatings)
+      .where(eq(playerRatings.recomputeId, originalId))
+      .orderBy(playerRatings.rank)
+      .limit(1);
+    const originalRating = and(
+      eq(playerRatings.recomputeId, originalId),
+      eq(playerRatings.playerId, ratedPlayer!.playerId),
+    );
+    await db
+      .update(playerRatings)
+      .set({ skillRating: 1720, skillSd: 84, conservativeRating: 1552 })
+      .where(originalRating);
+    await createSeedingRun(db, upcomingId, null);
+
+    await runRecompute(db);
+    expect(await latestRecomputeId(db)).not.toBe(originalId);
+
+    const result = await latestSeedingRun(db, upcomingId);
+    expect(result?.ratingSnapshot).toEqual({
+      model: 'whr',
+      publishedAt: publishedAt.toISOString(),
+    });
+    const entry = result?.entries.find(({ playerId }) => playerId === ratedPlayer!.playerId);
+    expect(entry).toMatchObject({ autoScore: 1552, seedRating: { skill: 1720, uncertainty: 84 } });
+
+    await db
+      .update(playerRatings)
+      .set({ skillRating: 1750, skillSd: 85, conservativeRating: 1580 })
+      .where(originalRating);
+    const sourceMismatch = await latestSeedingRun(db, upcomingId);
+    expect(
+      sourceMismatch?.entries.find(({ playerId }) => playerId === ratedPlayer!.playerId),
+    ).toMatchObject({ autoScore: 1552, seedRating: null });
+
+    await db.delete(recomputes).where(eq(recomputes.id, originalId));
+    const sourceRemoved = await latestSeedingRun(db, upcomingId);
+    expect(sourceRemoved?.ratingSnapshot).toBeNull();
+    expect(
+      sourceRemoved?.entries.find(({ playerId }) => playerId === ratedPlayer!.playerId),
+    ).toMatchObject({
+      autoScore: 1552,
+      seedRating: null,
+    });
   });
 
   it('supports manual reorder and pushes seeds to Challonge with verification', async () => {
