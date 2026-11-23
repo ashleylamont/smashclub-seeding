@@ -41,7 +41,13 @@ function publishRepository() {
     git('commit', '--quiet', '--allow-empty', '-m', message);
     return git('rev-parse', 'HEAD');
   };
-  const run = (script: string, sha: string, ref: string, event: string) => {
+  const run = (
+    script: string,
+    sha: string,
+    ref: string,
+    event: string,
+    { verified = sha, approved = sha } = {},
+  ) => {
     writeFileSync(output, '');
     const result = spawnSync(process.execPath, [join(cwd, 'scripts', script)], {
       cwd,
@@ -49,6 +55,8 @@ function publishRepository() {
       env: {
         ...env,
         GITHUB_SHA: sha,
+        VERIFIED_SHA: verified,
+        NUMBERED_RELEASE_SHA: approved,
         GITHUB_REF: ref,
         GITHUB_EVENT_NAME: event,
         GITHUB_OUTPUT: output,
@@ -63,8 +71,12 @@ function publishRepository() {
     commit,
     writeVersion,
     classify: (sha: string) => run('publish-verification-lane.mjs', sha, 'refs/heads/main', 'push'),
-    publish: (sha: string, ref = 'refs/heads/main', event = 'push') =>
-      run('publication-tags.mjs', sha, ref, event),
+    publish: (
+      sha: string,
+      ref = 'refs/heads/main',
+      event = 'push',
+      source?: { verified?: string; approved?: string },
+    ) => run('publication-tags.mjs', sha, ref, event, source),
   };
 }
 
@@ -76,6 +88,7 @@ function publishedTags(sha: string, tags: string[], version = '') {
     ...tags.map((tag) => `${image}:${tag}`),
     'END_TAGS',
     `version=${version}`,
+    `source_sha=${sha}`,
     '',
   ].join('\n');
 }
@@ -191,5 +204,69 @@ it('rejects tagged commits outside origin main history', () => {
     status: 1,
     output: '',
     stderr: expect.stringContaining('Only commits on main may be published'),
+  });
+});
+
+it(
+  'never gives a diverged rolling build the snapshot version and can rerun an exact old numeric release',
+  { timeout: 30_000 },
+  () => {
+    const { git, commit, publish } = publishRepository();
+    commit('1.2.3', 'Before release');
+    git('switch', '--quiet', '--create', 'version');
+    const cut = commit('1.2.4', 'Version Nemesis');
+    git('switch', '--quiet', 'main');
+    commit('1.2.3', 'A feature joins the following version');
+    git('merge', '--quiet', '--no-ff', '-m', 'Merge version', 'version');
+    const release = git('rev-parse', 'HEAD');
+    git('push', '--quiet', 'origin', 'main');
+
+    const rolling = { approved: cut, verified: release };
+    const snapshot = { approved: cut, verified: cut };
+    expect(publish(release, 'refs/heads/main', 'push', rolling)).toMatchObject({
+      status: 0,
+      output: publishedTags(release, ['main']),
+    });
+    expect(publish(release, 'refs/heads/main', 'push', snapshot)).toMatchObject({
+      status: 0,
+      output: publishedTags(cut, ['1.2.4'], '1.2.4'),
+    });
+    expect(
+      publish(release, 'refs/heads/main', 'push', { approved: release, verified: cut }),
+    ).toMatchObject({
+      status: 1,
+      output: '',
+      stderr: expect.stringContaining('resolved release source'),
+    });
+
+    git('tag', '-a', 'v1.2.4', cut, '-m', 'Nemesis 1.2.4');
+    git('push', '--quiet', 'origin', 'refs/tags/v1.2.4');
+    commit('1.2.4', 'Another feature lands while Publish was queued');
+    git('push', '--quiet', 'origin', 'main');
+    git('switch', '--quiet', '--detach', release);
+    expect(publish(release, 'refs/heads/main', 'push', rolling)).toMatchObject({
+      status: 0,
+      output: publishedTags(release, []),
+    });
+    expect(publish(release, 'refs/heads/main', 'push', snapshot)).toMatchObject({
+      status: 0,
+      output: publishedTags(cut, ['1.2.4'], '1.2.4'),
+    });
+    git('switch', '--quiet', '--detach', cut);
+    expect(publish(cut, 'refs/tags/v1.2.4')).toMatchObject({
+      status: 0,
+      output: publishedTags(cut, ['1.2.4'], '1.2.4'),
+    });
+  },
+);
+
+it('keeps rolling publication when a version bump has no approved numbered source', () => {
+  const { git, commit, publish } = publishRepository();
+  commit('1.2.3', 'Before unapproved release');
+  const unapproved = commit('1.2.4', 'Version bump whose source lookup failed');
+  git('push', '--quiet', 'origin', 'main');
+  expect(publish(unapproved, 'refs/heads/main', 'push', { approved: '' })).toMatchObject({
+    status: 0,
+    output: publishedTags(unapproved, ['main']),
   });
 });
