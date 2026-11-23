@@ -8,10 +8,11 @@ import {
   type ComponentProps,
   type ReactNode,
 } from 'react';
-import { Markdown } from 'markdown-to-jsx';
+import { Markdown, slugify } from 'markdown-to-jsx';
 import changelog from '../../CHANGELOG.md?raw';
+import { Disclosure } from '../components/ui/Disclosure';
 import { PageHeader } from '../components/ui/PageHeader';
-import { formatChangelog, releaseGroupHeadings } from '../lib/changelog.mjs';
+import { readChangelog, releaseGroupHeadings, type ChangelogRelease } from '../lib/changelog.mjs';
 import './ChangelogPage.css';
 
 const categoryStyles = new Map([
@@ -27,32 +28,17 @@ const releaseGroups = new Set([
   'Minor Changes',
   'Patch Changes',
 ]);
-const formattedChangelog = formatChangelog(changelog);
-
-function ReleaseHeading({ children, ...props }: ComponentProps<'h2'>) {
-  const [text] = Children.toArray(children);
-  const version = typeof text === 'string' && /^\d+\.\d+\.\d+$/.test(text) ? text : null;
-  return (
-    <h2
-      {...props}
-      className={
-        version
-          ? 'changelog-release'
-          : text === 'Before versioned releases'
-            ? 'changelog-archive'
-            : undefined
-      }
-    >
-      {version ? (
-        <a href={`https://github.com/ashleylamont/smashclub-seeding/releases/tag/v${version}`}>
-          {version}
-        </a>
-      ) : (
-        children
-      )}
-    </h2>
-  );
-}
+const archiveTitle = 'Before versioned releases';
+const archiveAnchor = slugify(archiveTitle);
+const olderId = 'changelog-older';
+const archiveId = 'changelog-archive-notes';
+const recentReleaseCount = 3;
+const { releases, archive } = readChangelog(changelog);
+const archiveNotes = archive.replace(/^## Before versioned releases\n+/, '');
+const archiveAnchors = new Set([
+  archiveAnchor,
+  ...Array.from(archiveNotes.matchAll(/^#{2,6} (.+)$/gm), ([, heading]) => slugify(heading)),
+]);
 
 function GroupHeading({ children, ...props }: ComponentProps<'h3'>) {
   const [text] = Children.toArray(children);
@@ -113,51 +99,137 @@ function Screenshot({ src, alt }: ComponentProps<'img'>) {
   return <img src={src?.replace(/^\.\/public\//, '/')} alt={alt} loading="lazy" />;
 }
 
+const noteOverrides = { h3: GroupHeading, li: ChangelogEntry, img: Screenshot };
+
+function releaseNotesId(anchor: string) {
+  return `changelog-notes-${anchor}`;
+}
+
+function Release({ release, open }: { release: ChangelogRelease; open: boolean }) {
+  const { anchor, highlights, notes, version } = release;
+  return (
+    <article className="changelog-release" aria-labelledby={anchor}>
+      <h2 id={anchor} tabIndex={-1}>
+        <a href={`https://github.com/ashleylamont/smashclub-seeding/releases/tag/v${version}`}>
+          {version}
+        </a>
+      </h2>
+      {highlights && (
+        <Markdown
+          className="changelog-highlights"
+          options={{
+            disableParsingRawHTML: true,
+            forceBlock: true,
+            forceWrapper: true,
+            overrides: { img: () => null },
+          }}
+        >
+          {highlights}
+        </Markdown>
+      )}
+      <Disclosure
+        id={releaseNotesId(anchor)}
+        title={
+          <>
+            Full notes<span className="visually-hidden"> for {version}</span>
+          </>
+        }
+        defaultOpen={open}
+        mountWhenClosed={false}
+      >
+        <Markdown
+          options={{
+            disableParsingRawHTML: true,
+            overrides: noteOverrides,
+            slugify: (heading) => `${anchor}-${slugify(heading)}`,
+          }}
+        >
+          {notes}
+        </Markdown>
+      </Disclosure>
+    </article>
+  );
+}
+
+function expand(id: string) {
+  document.getElementById(id)?.dispatchEvent(new Event('ui:expand'));
+}
+
 export function ChangelogPage() {
   const page = useRef<HTMLDivElement>(null);
   const hash = useRouterState({ select: (state) => state.location.hash });
+  const linkedRelease = releases.findIndex(({ anchor }) => anchor === hash);
+  const linkedArchive = archiveAnchors.has(hash);
+  const openOlder = linkedRelease >= recentReleaseCount || linkedArchive;
 
   useEffect(() => {
-    const target = hash ? document.getElementById(hash) : null;
-    if (!target || !page.current?.contains(target)) return;
+    if (!hash) return;
+    if (openOlder) expand(olderId);
 
-    // The router scrolls as soon as the route renders. Late fonts can reflow
-    // the earlier entries and move the heading under the sticky navigation.
+    // The router initially scrolls before fonts and disclosures settle.
     const controller = new AbortController();
     const cancel = () => controller.abort();
     const options = { capture: true, passive: true, signal: controller.signal };
     for (const event of ['keydown', 'pointerdown', 'wheel']) {
       window.addEventListener(event, cancel, options);
     }
-    void document.fonts.ready.then(() => {
-      requestAnimationFrame(() => {
+    let frame = requestAnimationFrame(() => {
+      if (linkedRelease >= 0) expand(releaseNotesId(hash));
+      if (linkedArchive) expand(archiveId);
+      void document.fonts.ready.then(() => {
         if (controller.signal.aborted) return;
-        cancel();
-        const top = target.getBoundingClientRect().top;
-        const margin = Number.parseFloat(getComputedStyle(target).scrollMarginBlockStart);
-        if (top < margin - 1 || top >= window.innerHeight) target.scrollIntoView();
+        frame = requestAnimationFrame(() => {
+          if (controller.signal.aborted) return;
+          cancel();
+          const target = document.getElementById(hash);
+          if (!target || !page.current?.contains(target)) return;
+          target.tabIndex = -1;
+          target.focus({ preventScroll: true });
+          const top = target.getBoundingClientRect().top;
+          const margin = Number.parseFloat(getComputedStyle(target).scrollMarginBlockStart);
+          if (top < margin - 1 || top >= window.innerHeight) target.scrollIntoView();
+        });
       });
     });
-    return cancel;
-  }, [hash]);
+    return () => {
+      cancel();
+      cancelAnimationFrame(frame);
+    };
+  }, [hash, linkedArchive, linkedRelease, openOlder]);
 
   return (
     <div className="page changelog-page" ref={page}>
       <PageHeader title="Nemesis changelog" />
-      <Markdown
-        options={{
-          disableParsingRawHTML: true,
-          overrides: {
-            h1: () => null,
-            h2: ReleaseHeading,
-            h3: GroupHeading,
-            li: ChangelogEntry,
-            img: Screenshot,
-          },
-        }}
+      {releases.slice(0, recentReleaseCount).map((release) => (
+        <Release key={release.version} release={release} open={release.anchor === hash} />
+      ))}
+      <Disclosure
+        id={olderId}
+        title="Older releases"
+        defaultOpen={openOlder}
+        mountWhenClosed={false}
       >
-        {formattedChangelog}
-      </Markdown>
+        {releases.slice(recentReleaseCount).map((release) => (
+          <Release key={release.version} release={release} open={release.anchor === hash} />
+        ))}
+        {archiveNotes && (
+          <section>
+            <h2 className="changelog-archive" id={archiveAnchor} tabIndex={-1}>
+              {archiveTitle}
+            </h2>
+            <Disclosure
+              id={archiveId}
+              title="Archive notes"
+              defaultOpen={linkedArchive}
+              mountWhenClosed={false}
+            >
+              <Markdown options={{ disableParsingRawHTML: true, overrides: noteOverrides }}>
+                {archiveNotes}
+              </Markdown>
+            </Disclosure>
+          </section>
+        )}
+      </Disclosure>
     </div>
   );
 }

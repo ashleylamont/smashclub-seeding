@@ -7,10 +7,12 @@ export function Disclosure({
   className = '',
   triggerClassName = '',
   defaultOpen = false,
+  mountWhenClosed = true,
   ...props
 }: Omit<ComponentProps<typeof Primitive.Root>, 'title' | 'open' | 'onOpenChange'> & {
   title: ReactNode;
   triggerClassName?: string;
+  mountWhenClosed?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const root = useRef<HTMLDivElement>(null);
@@ -35,7 +37,10 @@ export function Disclosure({
         </span>
         <span className="ui-disclosure-label">{title}</span>
       </Primitive.Trigger>
-      <Primitive.Content forceMount className="ui-disclosure-content">
+      <Primitive.Content
+        forceMount={mountWhenClosed || undefined}
+        className="ui-disclosure-content"
+      >
         {children}
       </Primitive.Content>
     </Primitive.Root>
