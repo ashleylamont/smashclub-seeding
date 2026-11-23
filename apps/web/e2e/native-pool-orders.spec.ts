@@ -210,6 +210,10 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
   const automatic = standings.getByRole('region', { name: 'Open · Pool A', exact: true });
   const tied = standings.getByRole('region', { name: 'Open · Pool B', exact: true });
   const plannerLink = standings.getByRole('link', { name: 'Confirm pool orders in planner' });
+  const standingsPalette = {
+    dark: { background: 'rgb(7, 9, 10)', ink: 'rgb(154, 152, 149)' },
+    light: { background: 'rgb(238, 236, 228)', ink: 'rgb(76, 83, 72)' },
+  };
   const captureStandings = async (phase: string) => {
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
@@ -225,6 +229,16 @@ test('TO desk automatically decides a unique pool, records an explicit tied-pool
         });
         await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+        // System theme emulation can briefly paint the new background with the old table ink.
+        await expect(page.locator('html')).toHaveCSS('color-scheme', theme);
+        await expect(page.locator('body')).toHaveCSS(
+          'background-color',
+          standingsPalette[theme].background,
+        );
+        await expect(automatic.getByRole('cell').first()).toHaveCSS(
+          'color',
+          standingsPalette[theme].ink,
+        );
         expect(
           (
             await new AxeBuilder({ page })
