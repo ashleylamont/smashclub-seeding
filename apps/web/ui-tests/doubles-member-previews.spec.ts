@@ -6,14 +6,21 @@ const memberA = 'fc875fb2-ea79-4a59-873d-798ca2ba021f';
 const memberB = 'fd44e7b2-b9dd-47bb-853a-747d681f6be4';
 const firstAlias = 'X';
 const secondAlias = 'LongTournamentAliasThatWrapsInsideTheirDoublesPair';
-const pair = `${firstAlias} / ${secondAlias}`;
 const team = 'Side Quest';
 
-async function doublesEvent(page: Page, status = 'underway') {
+async function doublesEvent(
+  page: Page,
+  {
+    status = 'underway',
+    memberAliases = [firstAlias, secondAlias],
+  }: { status?: string; memberAliases?: readonly [string, string] } = {},
+) {
+  const [firstName, secondName] = memberAliases;
+  const pair = `${firstName} / ${secondName}`;
   const fixture = await mockEvent(page, { role: 'player', bracket: true });
   Object.assign(fixture.snapshot.plan, { competitionFormat: 'doubles', status });
   Object.assign(fixture.snapshot, {
-    memberNames: { [memberA]: firstAlias, [memberB]: secondAlias },
+    memberNames: { [memberA]: firstName, [memberB]: secondName },
   });
   const playing = fixture.snapshot.matches.find((match) => match.status === 'playing')!;
   const semi = fixture.snapshot.matches.find((match) => match.id === 'fixture-semi-b')!;
@@ -51,7 +58,7 @@ async function doublesEvent(page: Page, status = 'underway') {
     requests.push(playerId);
     return {
       profile: {
-        name: playerId === memberA ? firstAlias : secondAlias,
+        name: playerId === memberA ? firstName : secondName,
         characters: ['mario'],
         rating: { clubRating: 1538, wins: 8, losses: 5, isProvisional: false },
       },
@@ -155,11 +162,55 @@ for (const width of [320, 390, 1440])
       });
   });
 
+test.describe('same-name doubles members on a narrow phone', () => {
+  test.use({ viewport: { width: 320, height: 844 }, hasTouch: true });
+
+  for (const theme of ['dark', 'light'] as const)
+    test(`labels each public profile by team position in ${theme}`, async ({ page }, testInfo) => {
+      await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+      const { fixture, playing, requests } = await doublesEvent(page, {
+        memberAliases: [secondAlias, secondAlias],
+      });
+      await page.goto(`/play/${PLAN_ID}?pool=${playing.division}%3A${playing.poolIndex}`);
+      const card = page.locator(`[data-player-match-id="${playing.id}"]`);
+      const score = card.getByRole('spinbutton').first();
+      await score.fill('2');
+      expect(requests).toEqual([]);
+
+      for (const [index, playerId] of [memberA, memberB].entries()) {
+        const label = `${secondAlias} (${index + 1})`;
+        const trigger = memberButton(card, label);
+        await expect(trigger).toHaveText(label);
+        const { width, height } = (await trigger.boundingBox())!;
+        expect(width).toBeGreaterThanOrEqual(44);
+        expect(height).toBeGreaterThanOrEqual(44);
+        await trigger.press('Enter');
+        const dialog = page.getByRole('dialog', { name: secondAlias, exact: true });
+        await expect(dialog.getByText('1538', { exact: true })).toBeVisible();
+        await expect(dialog.getByRole('link', { name: 'View full profile' })).toHaveAttribute(
+          'href',
+          `/players/${playerId}`,
+        );
+        await page.keyboard.press('Escape');
+        await expect(trigger).toBeFocused();
+        await expect(score).toHaveValue('2');
+      }
+
+      expect(requests).toEqual([memberA, memberB]);
+      expect(fixture.submissions).toEqual([]);
+      expect(fixture.unexpected).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+      expect((await axe(page)).violations).toEqual([]);
+      await ready(page);
+      await page.screenshot({ path: testInfo.outputPath('same-name-members.png') });
+    });
+});
+
 test('the native doubles archive links recorded members without opening a report form', async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const { fixture, playing, requests } = await doublesEvent(page, 'complete');
+  const { fixture, playing, requests } = await doublesEvent(page, { status: 'complete' });
   await page.goto(`/play/${PLAN_ID}?pool=${playing.division}%3A${playing.poolIndex}#results`);
   const results = page.getByRole('region', { name: 'Results', exact: true });
   const trigger = memberButton(results, firstAlias).first();

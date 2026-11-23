@@ -29,13 +29,14 @@ function publicDoublesMembers(
   if (!entrantId || !names || memberIds?.length !== 2) return;
   const [first, second] = memberIds;
   if (!first || !second || first === second) return;
-  const members = [first, second].flatMap((id) => {
+  const [firstMember, secondMember] = [first, second].flatMap((id) => {
     const alias = Object.hasOwn(names, id) ? names[id] : undefined;
     return id !== entrantId && playerIdPattern.test(id) && alias && alias !== 'Player'
       ? [{ id, name: alias }]
       : [];
   });
-  if (members.length !== 2) return;
+  if (!firstMember || !secondMember) return;
+  const members = [firstMember, secondMember] as const;
 
   // The public snapshot supplies member identity separately. Match only the
   // rendered suffix to preserve the optional team label and source fallbacks.
@@ -62,12 +63,21 @@ export function EventEntrantName({
   if (!doubles)
     return <PlayerProfileName playerId={singlesPreview ? entrantId : null} name={name} />;
 
+  const [first, second] = doubles.members;
+  const sameAlias = first.name === second.name;
+
   return (
     <span className="event-entrant-pair">
       {doubles.teamName && <span>{doubles.teamName}</span>}
       <span className="event-entrant-members">
-        {doubles.members.map(({ id, name }) => (
-          <PlayerProfileName key={id} playerId={id} name={name} />
+        {doubles.members.map(({ id, name }, index) => (
+          <PlayerProfilePreview
+            key={id}
+            playerId={id}
+            name={name}
+            trigger="name"
+            teamMemberPosition={sameAlias ? index + 1 : undefined}
+          />
         ))}
       </span>
     </span>
@@ -78,10 +88,12 @@ export function PlayerProfilePreview({
   playerId,
   name,
   trigger = 'button',
+  teamMemberPosition,
 }: {
   playerId: string;
   name: string;
   trigger?: 'button' | 'name';
+  teamMemberPosition?: number;
 }) {
   const [open, setOpen] = useState(false);
   const query = useQuery({
@@ -93,6 +105,7 @@ export function PlayerProfilePreview({
   const data = query.data;
   const profile = data?.profile;
   const redirectTo = data?.redirectTo;
+  const triggerName = teamMemberPosition === undefined ? name : `${name} (${teamMemberPosition})`;
 
   return (
     <Dialog
@@ -108,9 +121,9 @@ export function PlayerProfilePreview({
               ? 'link-button link-button-target player-profile-preview-name'
               : undefined
           }
-          aria-label={`Preview ${name}`}
+          aria-label={`Preview ${triggerName}`}
         >
-          {trigger === 'name' ? name : 'Preview'}
+          {trigger === 'name' ? triggerName : 'Preview'}
         </Button>
       }
     >
