@@ -2,6 +2,13 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.10
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · Player profiles explain why a rating is provisional and how rookie sets count. [#618](https://github.com/ashleylamont/smashclub-seeding/pull/618) · [build 316e170](https://github.com/ashleylamont/smashclub-seeding/commit/316e170b148c3df1b68e1bba583873fece83b680)
+- 23 November 2026 · **Fix** · Give GitHub more time to link a merged version before publishing the verified Nemesis release. [#619](https://github.com/ashleylamont/smashclub-seeding/pull/619) · [build 3d27e01](https://github.com/ashleylamont/smashclub-seeding/commit/3d27e0131a03d317143ed76a54a15e6b1c295e75)
+
 ## 0.23.9
 
 ### Patch Changes
