@@ -1,0 +1,37 @@
+.native-result-correction {
+  min-inline-size: 0;
+}
+
+.native-result-correction form,
+.native-result-correction fieldset {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s3);
+  min-inline-size: 0;
+}
+
+.native-result-correction form {
+  max-inline-size: 40rem;
+}
+
+.native-result-correction form > label,
+.native-result-correction fieldset > label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s1);
+  min-inline-size: 0;
+}
+
+.native-result-correction form > .ui-button,
+.native-result-correction .banner > .ui-button,
+.native-result-correction label > .ui-select {
+  justify-self: start;
+  min-inline-size: 0;
+}
+
+.native-result-correction .banner {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  overflow-wrap: anywhere;
+}

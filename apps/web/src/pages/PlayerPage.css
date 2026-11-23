@@ -144,6 +144,10 @@
 }
 
 /* ── match log ──────────────────────────────────────────────────── */
+.match-estimates > .ui-disclosure-content {
+  padding-block-start: var(--s2);
+}
+
 .match-history-scroll {
   max-height: 520px;
   overflow-y: auto;
