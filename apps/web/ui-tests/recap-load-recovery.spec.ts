@@ -9,6 +9,7 @@ const alias = 'An entrant with a long tournament alias for the public results';
 const recap = {
   slug,
   name: 'Club night with a long tournament name for the shared recap',
+  eventKey: '2026-10-02',
   competitionFormat: 'singles',
   isComplete: true,
   isAbandoned: false,
