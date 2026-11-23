@@ -119,7 +119,7 @@
 }
 
 .ratings-tooltip {
-  max-width: min(22rem, calc(100vw - 2 * var(--s5)));
+  max-width: 22rem;
   max-height: 320px;
   overflow-y: auto;
 }
@@ -153,6 +153,7 @@
   }
   .chart-control {
     flex: 1 1 150px;
+    min-width: 0;
   }
   .chart-control .select,
   .chart-control .input {

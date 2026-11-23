@@ -262,7 +262,7 @@ test('a modern selection absent from the published run cannot recover cached pla
 });
 
 for (const theme of ['light', 'dark'] as const) {
-  for (const width of [390, 1440]) {
+  for (const width of [320, 390, 1440]) {
     test(`an unavailable rating night leaves a comparison gap at ${width}px in ${theme}`, async ({
       page,
     }, info) => {
@@ -291,9 +291,28 @@ for (const theme of ['light', 'dark'] as const) {
       await plot.press('ArrowRight');
       await expect(status).toContainText('1460');
       await expect(status).toContainText('Missed night');
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
-        width,
+      const geometry = await status.evaluate((element) => {
+        const chart = element.closest('.recharts-wrapper')!.getBoundingClientRect();
+        const tooltip = element.getBoundingClientRect();
+        return {
+          chartLeft: chart.left,
+          chartRight: chart.right,
+          tooltipLeft: tooltip.left,
+          tooltipRight: tooltip.right,
+          pageWidth: document.documentElement.scrollWidth,
+        };
+      });
+      expect(geometry.pageWidth, JSON.stringify(geometry)).toBeLessThanOrEqual(width);
+      expect(geometry.tooltipLeft, JSON.stringify(geometry)).toBeGreaterThanOrEqual(
+        geometry.chartLeft,
       );
+      expect(geometry.tooltipRight, JSON.stringify(geometry)).toBeLessThanOrEqual(
+        geometry.chartRight,
+      );
+      await chart.screenshot({
+        path: info.outputPath('comparison-missed-night.png'),
+        style: captureStyle,
+      });
       expect(
         (await new AxeBuilder({ page }).include('.ratings-over-time').analyze()).violations,
       ).toEqual([]);

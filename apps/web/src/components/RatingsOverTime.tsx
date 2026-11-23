@@ -50,6 +50,9 @@ const SERIES_SLOTS = [
 const SERIES_DASH = ['0', '6 4', '2 3', '10 4', '1 3', '8 3 2 3', '4 2', '12 5'];
 
 const MAX_SERIES = SERIES_SLOTS.length;
+const CHART_MARGIN = { top: 8, right: 16, bottom: 4, left: 0 };
+const Y_AXIS_WIDTH = 48;
+const PLOT_GUTTERS = CHART_MARGIN.left + CHART_MARGIN.right + Y_AXIS_WIDTH;
 
 /** How many players are pre-selected on first render. */
 const DEFAULT_SELECTION = 5;
@@ -244,7 +247,7 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
         <ResponsiveContainer width="100%" height={380}>
           <LineChart
             data={chartData}
-            margin={{ top: 8, right: 16, bottom: 4, left: 0 }}
+            margin={CHART_MARGIN}
             aria-label="Player estimates by club night"
           >
             <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
@@ -264,10 +267,12 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
               tick={{ fill: 'var(--text-soft)', fontSize: 11 }}
               stroke="var(--border-strong)"
               tickLine={false}
-              width={48}
+              width={Y_AXIS_WIDTH}
             />
             <Tooltip
               cursor={{ stroke: 'var(--border-strong)' }}
+              // Recharts positions the tooltip within the plot, excluding the axes and gutters.
+              wrapperStyle={{ maxWidth: `calc(100% - ${PLOT_GUTTERS}px)` }}
               // Recharts hides the whole tooltip when its filtered payload is empty.
               filterNull={false}
               content={({ active, payload, label }) => {
