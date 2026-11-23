@@ -165,78 +165,81 @@ export function NativeBracketControls({
                   ))}
                 </>
               )}
-              {preview.brackets.map((bracket) => (
-                <div key={`${bracket.division}:${bracket.stage}`}>
-                  <h4>
-                    {divisionLabel(bracket.division)} {stageLabel(bracket.stage)} ·{' '}
-                    {'qualifierSlots' in bracket && bracket.qualifierSlots
-                      ? bracket.qualifierSlots.length
-                      : bracket.entrantIds.length}{' '}
-                    entrants
-                    {'alreadyDrawn' in bracket && bracket.alreadyDrawn ? ' · Created' : ''}
-                  </h4>
-                  {'previewMatches' in bracket && bracket.previewMatches.length ? (
-                    <section className="app-event-board">
-                      <p className="event-live-note">
-                        Preview only.
-                        {bracket.previewMatches.some((match) => match.nativeRound !== 1) &&
-                          ' Scroll sideways to follow later rounds.'}
+              {preview.brackets.map((bracket) => {
+                const entrantCount =
+                  'qualifierSlots' in bracket && bracket.qualifierSlots
+                    ? bracket.qualifierSlots.length
+                    : bracket.entrantIds.length;
+                return (
+                  <div key={`${bracket.division}:${bracket.stage}`}>
+                    <h4>
+                      {divisionLabel(bracket.division)} {stageLabel(bracket.stage)} · {entrantCount}{' '}
+                      {entrantCount === 1 ? 'entrant' : 'entrants'}
+                      {'alreadyDrawn' in bracket && bracket.alreadyDrawn ? ' · Created' : ''}
+                    </h4>
+                    {'previewMatches' in bracket && bracket.previewMatches.length ? (
+                      <section className="app-event-board">
+                        <p className="event-live-note">
+                          Preview only.
+                          {bracket.previewMatches.some((match) => match.nativeRound !== 1) &&
+                            ' Scroll sideways to follow later rounds.'}
+                        </p>
+                        <EventBracketLane
+                          matches={bracket.previewMatches.map((match) => ({
+                            ...match,
+                            player1Name: match.player1Id ? name(match.player1Id) : null,
+                            player2Name: match.player2Id ? name(match.player2Id) : null,
+                          }))}
+                          lane="winners"
+                          title=""
+                          label={`${divisionLabel(bracket.division)} ${stageLabel(bracket.stage)} bracket preview`}
+                          labels={
+                            new Map(bracket.previewMatches.map((match) => [match.id, match.label]))
+                          }
+                        />
+                      </section>
+                    ) : bracket.roundOne.length ? (
+                      <ol>
+                        {bracket.roundOne.map((match, index) => (
+                          <li key={index}>
+                            {name(
+                              match.player1Id,
+                              'player1Qualifier' in match ? match.player1Qualifier : undefined,
+                            )}{' '}
+                            vs{' '}
+                            {name(
+                              match.player2Id,
+                              'player2Qualifier' in match ? match.player2Qualifier : undefined,
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p>
+                        {bracket.entrantIds.length === 1
+                          ? 'One entrant advances automatically.'
+                          : 'No entrants in this bracket.'}
                       </p>
-                      <EventBracketLane
-                        matches={bracket.previewMatches.map((match) => ({
-                          ...match,
-                          player1Name: match.player1Id ? name(match.player1Id) : null,
-                          player2Name: match.player2Id ? name(match.player2Id) : null,
-                        }))}
-                        lane="winners"
-                        title=""
-                        label={`${divisionLabel(bracket.division)} ${stageLabel(bracket.stage)} bracket preview`}
-                        labels={
-                          new Map(bracket.previewMatches.map((match) => [match.id, match.label]))
-                        }
-                      />
-                    </section>
-                  ) : bracket.roundOne.length ? (
-                    <ol>
-                      {bracket.roundOne.map((match, index) => (
-                        <li key={index}>
-                          {name(
-                            match.player1Id,
-                            'player1Qualifier' in match ? match.player1Qualifier : undefined,
-                          )}{' '}
-                          vs{' '}
-                          {name(
-                            match.player2Id,
-                            'player2Qualifier' in match ? match.player2Qualifier : undefined,
-                          )}
-                        </li>
-                      ))}
-                    </ol>
-                  ) : (
-                    <p>
-                      {bracket.entrantIds.length === 1
-                        ? 'One entrant advances automatically.'
-                        : 'No entrants in this bracket.'}
-                    </p>
-                  )}
-                  {'strengthSeeding' in bracket &&
-                    bracket.strengthSeeding &&
-                    bracket.strengthSeeding.seeds.length > 0 && (
-                      <StrengthFinalsReview
-                        seeding={bracket.strengthSeeding}
-                        qualifierSlots={bracket.qualifierSlots}
-                        name={name}
-                        historical={
-                          'alreadyDrawn' in bracket &&
-                          bracket.alreadyDrawn &&
-                          bracket.strengthSeeding.seeds.some(
-                            ({ playerId }) => !bracket.entrantIds.includes(playerId),
-                          )
-                        }
-                      />
                     )}
-                </div>
-              ))}
+                    {'strengthSeeding' in bracket &&
+                      bracket.strengthSeeding &&
+                      bracket.strengthSeeding.seeds.length > 0 && (
+                        <StrengthFinalsReview
+                          seeding={bracket.strengthSeeding}
+                          qualifierSlots={bracket.qualifierSlots}
+                          name={name}
+                          historical={
+                            'alreadyDrawn' in bracket &&
+                            bracket.alreadyDrawn &&
+                            bracket.strengthSeeding.seeds.some(
+                              ({ playerId }) => !bracket.entrantIds.includes(playerId),
+                            )
+                          }
+                        />
+                      )}
+                  </div>
+                );
+              })}
               <Button
                 variant="primary"
                 type="submit"

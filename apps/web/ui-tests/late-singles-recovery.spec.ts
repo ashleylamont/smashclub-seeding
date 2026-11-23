@@ -157,7 +157,7 @@ for (const theme of ['dark', 'light'] as const) {
       await refresh.press('Enter');
       await expect(preview.getByRole('heading', { name: 'Change preview' })).toBeFocused();
       await expect(
-        preview.getByText('4 new match(es) · 0 affected existing match(es)'),
+        preview.getByText('4 new matches · 0 affected existing matches', { exact: true }),
       ).toBeVisible();
       await expect(apply).toBeEnabled();
       expect(reviewed).toEqual([

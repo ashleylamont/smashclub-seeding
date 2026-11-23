@@ -343,7 +343,7 @@ test('knockout attendance previews use the live match name for withdrawal and re
       await expect(preview.getByRole('heading', { name: 'Matches' })).toBeVisible();
       await expect(preview).toContainText('No matches become ready to call.');
       await expect(preview).toContainText('Recorded forfeit stays in place.');
-      await expect(preview).not.toContainText('new match(es)');
+      await expect(preview).not.toContainText(/new match/);
     }
     const affected = await query<{ affectedMatches: Pick<Match, 'id' | 'label' | 'status'>[] }>(
       page.request,
