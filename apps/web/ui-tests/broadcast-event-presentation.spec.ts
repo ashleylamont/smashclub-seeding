@@ -118,6 +118,8 @@ test('presentation save keeps keyboard focus predictable through a retry and nav
   const pending = control.getByRole('button', { name: 'Applying…' });
   await menu.press('Enter');
   await page.getByRole('option', { name: 'Progress', exact: true }).press('Enter');
+  await expect(menu).toBeFocused();
+  await expect(apply).toBeEnabled();
   await page.keyboard.press('Tab');
   await expect(apply).toBeFocused();
   await page.keyboard.press('Enter');
