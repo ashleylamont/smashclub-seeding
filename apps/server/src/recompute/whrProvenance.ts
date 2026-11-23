@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
 import { recomputes, type Db } from '@smashclub/db';
 import { defaultWhrConfig, prepareWhrHistory, type PreparedWhrHistory } from '@smashclub/engine';
 import { ratingSettingsSchema, type RatingSettings } from '@smashclub/shared';
@@ -20,7 +21,7 @@ export async function readWhrRunProvenance(db: Db, recomputeId: string) {
   return {
     fingerprints,
     settings: settings.data,
-    convergedPreNightKeys: currentWhrConvergedPreNightKeys(run?.stats),
+    convergedPreNightKeys: currentWhrConvergedPreNightKeys(run?.stats, fingerprints),
   };
 }
 
@@ -54,13 +55,21 @@ export function currentWhrPrefixFingerprints(stats: unknown): Record<string, str
     : null;
 }
 
+const convergedPreNightKeysSchema = z.array(z.iso.date());
+
 /** A recorded empty list is valid for a run without qualifying earlier fits. */
-export function currentWhrConvergedPreNightKeys(stats: unknown): readonly string[] | null {
+export function currentWhrConvergedPreNightKeys(
+  stats: unknown,
+  fingerprints: Record<string, string>,
+): readonly string[] | null {
   const keys =
     stats && typeof stats === 'object' && 'whrConvergedPreNightKeys' in stats
       ? stats.whrConvergedPreNightKeys
       : null;
-  return Array.isArray(keys) && keys.every((key) => typeof key === 'string') ? keys : null;
+  const parsed = convergedPreNightKeysSchema.safeParse(keys);
+  return parsed.success && parsed.data.every((key) => Object.hasOwn(fingerprints, key))
+    ? parsed.data
+    : null;
 }
 
 /** Hash the ordered fit inputs. Each checkpoint excludes later nights and debut priors. */

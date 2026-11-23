@@ -11,7 +11,12 @@ import {
 import type { RecapFact, RecapFactKind } from '@smashclub/engine';
 import { importRegistryPlayers, registerTournamentSlugs } from '../src/bootstrap/importRegistry';
 import { syncTournament } from '../src/sync/sync';
-import { latestRecomputeId, needsRatingRecompute, runRecompute } from '../src/recompute/recompute';
+import {
+  backfillRatingRecompute,
+  latestRecomputeId,
+  needsRatingRecompute,
+  runRecompute,
+} from '../src/recompute/recompute';
 import { RecomputeTrigger } from '../src/recompute/trigger';
 import * as whrProvenance from '../src/recompute/whrProvenance';
 import { loadEnv } from '../src/env';
@@ -390,6 +395,14 @@ describe('public.recap', () => {
       .where(eq(recomputes.id, fixture.recomputeId));
     const legacyStats = { ...(run!.stats as Record<string, unknown>) };
     delete legacyStats.whrConvergedPreNightKeys;
+    for (const badKey of ['2025-03-09', '2025-02-30']) {
+      await db
+        .update(recomputes)
+        .set({ stats: { ...legacyStats, whrConvergedPreNightKeys: ['2025-03-08', badKey] } })
+        .where(eq(recomputes.id, fixture.recomputeId));
+      expect.soft(await needsRatingRecompute(db)).toBe(true);
+      expect.soft(factsOfKind(await fixture.readRecap(), 'rating_upset')).toEqual([]);
+    }
     await db
       .update(recomputes)
       .set({ stats: legacyStats })
@@ -407,8 +420,12 @@ describe('public.recap', () => {
     expect(factsOfKind(recapBefore, 'seed_upset')).toHaveLength(1);
     expect.soft(factsOfKind(recapBefore, 'rating_upset')).toEqual([]);
 
-    const { recomputeId } = await runRecompute(db);
+    const repaired = await backfillRatingRecompute(db);
+    expect(repaired).not.toBeNull();
+    const { recomputeId } = repaired!;
     expect(await needsRatingRecompute(db)).toBe(false);
+    expect(await backfillRatingRecompute(db)).toBeNull();
+    expect(await latestRecomputeId(db)).toBe(recomputeId);
     const impact = await fixture.readImpact(recomputeId);
     expect(impact).toMatchObject({
       status: 'available',

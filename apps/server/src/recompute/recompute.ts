@@ -25,6 +25,14 @@ import { getRatingSettings, updateRatingSettings } from '../settings';
 export const ENGINE_VERSION = '2.1.0';
 const RATING_INSERT_CHUNK = 500;
 
+interface RatingRecomputeResult {
+  recomputeId: string;
+  model: 'whr';
+  players: number;
+  sets: number;
+  events: number;
+}
+
 /**
  * Full rating recompute: loads every rateable set (complete, both players
  * resolved, not excluded) from tournaments with a known event date, fits
@@ -32,14 +40,24 @@ const RATING_INSERT_CHUNK = 500;
  * new recompute row. Readers always query the latest complete recompute, so
  * a running recompute never disturbs them. Historical runs are retained with their original provenance.
  */
-export async function runRecompute(
-  db: Db,
-): Promise<{ recomputeId: string; model: 'whr'; players: number; sets: number; events: number }> {
+export function runRecompute(db: Db): Promise<RatingRecomputeResult> {
+  return withRecomputeLock(db, computeRatings);
+}
+
+export function backfillRatingRecompute(db: Db): Promise<RatingRecomputeResult | null> {
+  return withRecomputeLock(db, async (tx) => {
+    // A native rating intent or source update may already have published a run.
+    if (!(await needsRatingRecompute(tx))) return null;
+    return computeRatings(tx);
+  });
+}
+
+async function withRecomputeLock<T>(db: Db, compute: (tx: Db) => Promise<T>): Promise<T> {
   // Serialize every caller with durable native publication and preserve failed-run audit.
   const outcome = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(782392)`);
     try {
-      return { result: await computeRatings(tx) };
+      return { result: await compute(tx) };
     } catch (error) {
       return { error };
     }
@@ -48,9 +66,7 @@ export async function runRecompute(
   return outcome.result;
 }
 
-async function computeRatings(
-  db: Db,
-): Promise<{ recomputeId: string; model: 'whr'; players: number; sets: number; events: number }> {
+async function computeRatings(db: Db): Promise<RatingRecomputeResult> {
   const { rating, version } = await getRatingSettings(db);
   const { engineSets, engineTournaments } = await loadWhrHistory(db);
 
@@ -257,9 +273,7 @@ export function hasRatingNightLedger(stats: unknown): boolean {
 
 export async function needsRatingRecompute(db: Db): Promise<boolean> {
   const stats = (await latestCompletedRecompute(db))?.stats;
-  return (
-    !hasRatingNightLedger(stats) ||
-    !currentWhrPrefixFingerprints(stats) ||
-    !currentWhrConvergedPreNightKeys(stats)
-  );
+  if (!hasRatingNightLedger(stats)) return true;
+  const fingerprints = currentWhrPrefixFingerprints(stats);
+  return !fingerprints || !currentWhrConvergedPreNightKeys(stats, fingerprints);
 }
