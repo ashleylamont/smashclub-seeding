@@ -10,6 +10,7 @@ import { challongeStateLabel, setStateLabel, syncStateLabel } from '../lib/label
 import { useEventSource } from '../lib/useEventSource';
 import { useNow } from '../lib/useNow';
 import { InfoTip } from '../components/InfoTip';
+import { ArchiveQueryContent, type ArchivePageFeedback } from './ArchiveQueryContent';
 import { ReportedCharacters } from '../components/ReportedCharacters';
 import { ArchiveBracketGraphic } from '../components/ArchiveBracketGraphic';
 import { PlayedCharacterReport } from '../components/PlayedCharacterReport';
@@ -18,27 +19,14 @@ import './Tournaments.css';
 
 export function TournamentPage() {
   const { slug } = useParams({ from: '/tournaments/$slug' });
-  const queryClient = useQueryClient();
-  const now = useNow();
-
   const query = useQuery({
     queryKey: ['tournament', slug],
     queryFn: () => trpc.public.tournament.query({ slug }),
   });
 
-  const isLive = isLiveNow(query.data ?? null, now);
-  useEventSource(isLive && query.data ? `/api/live/${query.data.id}` : null, (type) => {
-    if (type === 'set_updated' || type === 'sync_completed') {
-      void queryClient.invalidateQueries({ queryKey: ['tournament', slug] });
-    }
-  });
-
-  if (query.isPending) return <p className="loading-text">Loading tournament…</p>;
-  if (query.isError)
-    return <p className="error-text">Failed to load tournament: {query.error.message}</p>;
-  if (query.data === null) return <p className="error-text">Tournament not found.</p>;
-
-  return <TournamentDetail data={query.data} now={now} />;
+  return (
+    <ArchiveQueryContent key={slug} kind="tournament" query={query} content={TournamentDetail} />
+  );
 }
 
 /**
@@ -51,9 +39,20 @@ function isLiveNow(data: TournamentData | null, now: number): boolean {
   return data?.liveUntil != null && new Date(data.liveUntil).getTime() > now;
 }
 
-function TournamentDetail({ data, now }: { data: TournamentData; now: number }) {
+function TournamentDetail({
+  data,
+  headingRef,
+  refreshNotice,
+}: { data: TournamentData } & ArchivePageFeedback) {
   const reporter = useCharacterReporter();
+  const queryClient = useQueryClient();
+  const now = useNow();
   const isLive = isLiveNow(data, now);
+  useEventSource(isLive ? `/api/live/${data.id}` : null, (type) => {
+    if (type === 'set_updated' || type === 'sync_completed') {
+      void queryClient.invalidateQueries({ queryKey: ['tournament', data.slug] });
+    }
+  });
   // Over, not necessarily finished: a bracket abandoned mid-run is also done.
   const abandoned = isBracketAbandoned(data, now);
   const isComplete = isBracketOver(data, now);
@@ -98,7 +97,9 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
   return (
     <div>
       <div className="page-header">
-        <h1>{data.name}</h1>
+        <h1 ref={headingRef} tabIndex={-1}>
+          {data.name}
+        </h1>
         <span className="tournament-tags">
           {isLive && <span className="live-badge">LIVE</span>}
           {data.isRookie && (
@@ -148,6 +149,7 @@ function TournamentDetail({ data, now }: { data: TournamentData; now: number }) 
         )}
       </p>
 
+      {refreshNotice}
       {data.bracketGraphic && (
         <div className="ui-actions tournament-archive-actions">
           <ArchiveBracketGraphic graphic={data.bracketGraphic} />

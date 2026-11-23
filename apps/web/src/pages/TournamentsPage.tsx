@@ -6,6 +6,8 @@ import { formatDate } from '../lib/format';
 import { syncStateLabel } from '../lib/labels';
 import { groupTournamentsByEvent, type TournamentEventGroup } from '../lib/eventGrouping';
 import { useNow } from '../lib/useNow';
+import type { TournamentListItem } from '../lib/apiTypes';
+import { ArchiveQueryContent, type ArchivePageFeedback } from './ArchiveQueryContent';
 import './Tournaments.css';
 
 export function TournamentsPage() {
@@ -13,15 +15,21 @@ export function TournamentsPage() {
     queryKey: ['tournaments'],
     queryFn: () => trpc.public.tournaments.query(),
   });
+  return <ArchiveQueryContent kind="tournaments" query={query} content={Tournaments} />;
+}
 
+function Tournaments({
+  data: tournaments,
+  headingRef,
+  refreshNotice,
+}: { data: TournamentListItem[] } & ArchivePageFeedback) {
   // A ticking clock rather than a read during render: a live window that
   // expires while this page is open has to actually move the tournament out of
   // the Live group.
   const now = useNow();
 
   const groups = useMemo(() => {
-    const all = query.data ?? [];
-    const events = groupTournamentsByEvent(all, now);
+    const events = groupTournamentsByEvent(tournaments, now);
     const live = events.filter((t) => t.bucket === 'live');
     const upcoming = events
       .filter((t) => t.bucket === 'upcoming')
@@ -32,16 +40,15 @@ export function TournamentsPage() {
       .filter((t) => t.bucket === 'completed')
       .sort((a, b) => (b.eventDate ?? '').localeCompare(a.eventDate ?? ''));
     return { live, upcoming, completed };
-  }, [query.data, now]);
+  }, [tournaments, now]);
 
-  if (query.isPending) return <p className="loading-text">Loading tournaments…</p>;
-  if (query.isError)
-    return <p className="error-text">Failed to load tournaments: {query.error.message}</p>;
-
-  if (query.data.length === 0) {
+  if (tournaments.length === 0) {
     return (
       <div>
-        <h1>Tournaments</h1>
+        <h1 ref={headingRef} tabIndex={-1}>
+          Tournaments
+        </h1>
+        {refreshNotice}
         <p className="muted">No tournaments registered yet.</p>
       </div>
     );
@@ -50,11 +57,14 @@ export function TournamentsPage() {
   return (
     <div>
       <div className="page-header">
-        <h1>Tournaments</h1>
+        <h1 ref={headingRef} tabIndex={-1}>
+          Tournaments
+        </h1>
         <p className="muted page-header-note">
           Club nights, newest results first. Ratings count eligible played sets in these brackets.
         </p>
       </div>
+      {refreshNotice}
       {groups.live.length > 0 && <TournamentGroup title="Live" items={groups.live} />}
       {groups.upcoming.length > 0 && <TournamentGroup title="Upcoming" items={groups.upcoming} />}
       {groups.completed.length > 0 && (
