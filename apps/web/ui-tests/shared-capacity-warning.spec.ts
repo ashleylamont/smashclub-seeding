@@ -69,6 +69,7 @@ async function capacityForm(page: Page, named = false) {
     setup,
     capacity: setup.getByRole('spinbutton', { name: 'Ordinary concurrent matches' }),
     save: setup.getByRole('button', { name: 'Save capacity' }),
+    liveWarning: setup.locator('#dispatch-capacity-warning'),
     warning: setup.getByRole('status').filter({ hasText: /above the proposed ordinary limit/ }),
     commands,
     unexpected,
@@ -77,6 +78,46 @@ async function capacityForm(page: Page, named = false) {
     shared,
   };
 }
+
+test('updates the existing announcement region and describes the capacity and Save controls', async ({
+  page,
+}) => {
+  const { capacity, save, liveWarning } = await capacityForm(page);
+  await expect(liveWarning).toHaveAttribute('role', 'status');
+  await expect(liveWarning).toHaveAttribute('aria-atomic', 'true');
+  await expect(liveWarning).toBeEmpty();
+  await expect(liveWarning).toHaveCSS('position', 'absolute');
+  const original = await liveWarning.elementHandle();
+
+  await capacity.fill('1');
+  await expect(liveWarning).toContainText('1 match above the proposed ordinary limit.');
+  expect(await liveWarning.evaluate((node, previous) => node === previous, original)).toBe(true);
+  await expect(liveWarning.locator('[role="status"], [aria-live]')).toHaveCount(0);
+  await expect(capacity).toHaveAccessibleDescription(/1 match above the proposed ordinary limit/);
+  await expect(save).toHaveAccessibleDescription(/1 match above the proposed ordinary limit/);
+
+  await capacity.fill('2');
+  await expect(liveWarning).toBeEmpty();
+  expect(await liveWarning.evaluate((node, previous) => node === previous, original)).toBe(true);
+  await expect(capacity).not.toHaveAttribute('aria-describedby', /./);
+  await expect(save).not.toHaveAttribute('aria-describedby', /./);
+});
+
+test('leaves invalid drafts to native validation without showing a capacity consequence', async ({
+  page,
+}) => {
+  const { capacity, save, warning, commands } = await capacityForm(page);
+  for (const invalid of ['-1', '0.5']) {
+    await capacity.fill(invalid);
+    await expect(capacity).toHaveValue(invalid);
+    expect(await capacity.evaluate((input: HTMLInputElement) => input.validity.valid)).toBe(false);
+    await expect(warning).toHaveCount(0);
+    await save.press('Enter');
+    expect(commands).toEqual([]);
+  }
+  await capacity.fill('0');
+  await expect(warning).toContainText('2 matches above the proposed ordinary limit.');
+});
 
 for (const theme of ['dark', 'light'] as const) {
   for (const width of [390, 1440]) {
