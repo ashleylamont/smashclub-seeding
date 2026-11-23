@@ -22,7 +22,7 @@ import { CharacterIcons } from '../components/CharacterIcons';
 import { PlayerRatingNight } from '../components/PlayerRatingNight';
 import { PlayerMatchLog } from '../components/PlayerMatchLog';
 import { InfoTip } from '../components/InfoTip';
-import { formatDate, tierClass } from '../lib/format';
+import { formatDate, formatUtcDayKey, tierClass } from '../lib/format';
 import './PlayerPage.css';
 
 export function PlayerPage() {
@@ -62,19 +62,19 @@ function PlayerProfile({ data }: { data: PlayerData }) {
     const points = nights?.length
       ? nights.map((night) => ({
           ...night,
-          date: `${night.eventKey}T12:00:00Z`,
+          date: formatUtcDayKey(night.eventKey),
           tournament: attendedNights.get(night.eventKey)?.tournamentName ?? 'Club night',
         }))
       : [...attendedNights.values()].map((event) => ({
           ...event,
-          date: event.tournamentDate,
+          date: formatDate(event.tournamentDate),
           tournament: event.tournamentName,
           played: true,
         }));
     return points.map((point, idx) => ({
       idx: idx + 1,
       tournament: point.tournament,
-      date: formatDate(point.date),
+      date: point.date,
       played: point.played,
       rating: point.postRating,
       band: [point.postRating - 2 * point.postRd, point.postRating + 2 * point.postRd] as [

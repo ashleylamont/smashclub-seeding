@@ -644,3 +644,61 @@ for (const [width, theme] of [
       .toBe(true);
   });
 }
+
+for (const [timezoneId, width, theme] of [
+  ['Pacific/Auckland', 390, 'dark'],
+  ['Pacific/Auckland', 1440, 'light'],
+  ['Australia/Sydney', 390, 'light'],
+  ['Pacific/Honolulu', 1440, 'dark'],
+] as const) {
+  test.describe(`rated-night dates in ${timezoneId} at ${width}px in ${theme}`, () => {
+    test.use({ timezoneId, colorScheme: theme, viewport: { width, height: 900 } });
+
+    test('show the same calendar dates in the chart and night picker', async ({ page }, info) => {
+      const { profile } = await mockProfile(page);
+      const dates = ['2026-01-01', '2026-01-08', '2026-01-15'];
+      profile.nights = profile.nights.map((night, index) => ({
+        ...night,
+        eventKey: dates[index]!,
+      }));
+      const playedNights = profile.nights.filter(({ played }) => played);
+      profile.events = profile.events.map((event, index) => ({
+        ...event,
+        tournamentDate: `${playedNights[index]!.eventKey}T08:30:00Z`,
+      }));
+      profile.rating.lastPlayedDate = '2026-01-15T08:30:00Z';
+      await page.goto(`/players/${playerId}`);
+      const chart = page.locator('.rating-chart');
+      const plot = chart.getByRole('application');
+      const tooltip = chart.locator('.custom-tooltip');
+      await plot.focus();
+      await expect(tooltip.getByText('1 Jan 2026', { exact: true })).toBeVisible();
+      await plot.press('ArrowRight');
+      await expect(tooltip.getByText('8 Jan 2026 · No rated sets', { exact: true })).toBeVisible();
+      await expect(plot).toBeFocused();
+      await ready(page);
+      await chart.screenshot({ path: info.outputPath('missed-night-chart.png') });
+
+      const breakdown = page.getByRole('region', { name: 'Rating changes by night' });
+      const picker = breakdown.getByRole('combobox', { name: 'Rating night' });
+      await expect(picker).toContainText('15 Jan 2026');
+      await picker.press('Enter');
+      await expect(page.getByRole('option', { name: '15 Jan 2026', exact: true })).toBeFocused();
+      await expect(page.getByRole('option', { name: '1 Jan 2026', exact: true })).toBeVisible();
+      await page.keyboard.press('ArrowDown');
+      await expect(page.getByRole('option', { name: '8 Jan 2026', exact: true })).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(picker).toBeFocused();
+      await expect(picker).toContainText('8 Jan 2026');
+      await expect(breakdown).toContainText('No rated sets for this player on this night.');
+
+      if (timezoneId === 'Pacific/Honolulu') {
+        const results = page.getByRole('region', { name: 'Match results' });
+        await expect(results.getByRole('cell', { name: '31 Dec 2025' })).toBeVisible();
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      await page.evaluate(() => scrollTo(0, 0));
+      await page.screenshot({ path: info.outputPath('profile-rated-night.png'), fullPage: true });
+    });
+  });
+}

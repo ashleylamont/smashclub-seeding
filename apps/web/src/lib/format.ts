@@ -6,11 +6,20 @@ import {
   type UnplayedOutcome,
 } from '@smashclub/shared';
 
+const dateParts = { year: 'numeric', month: 'short', day: 'numeric' } as const;
+
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return date.toLocaleDateString(undefined, dateParts);
+}
+
+/** Rating ledger keys identify a UTC calendar day across time zones. */
+export function formatUtcDayKey(key: string): string {
+  const date = new Date(`${key}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString(undefined, { ...dateParts, timeZone: 'UTC' });
 }
 
 export function formatDateTime(iso: string | null | undefined): string {
