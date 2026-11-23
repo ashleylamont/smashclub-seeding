@@ -2,6 +2,12 @@
 
 Dates show when each change landed, in Sydney time. Select a version to open its GitHub release.
 
+## 0.23.7
+
+### Patch Changes
+
+- 23 November 2026 · **Fix** · Warn organisers before saving a shared setup limit below the number of active matches, so they know existing matches stay in place and new calls will wait. [#605](https://github.com/ashleylamont/smashclub-seeding/pull/605) · [build 144b26b](https://github.com/ashleylamont/smashclub-seeding/commit/144b26bae621743068e938651cbc994e11011c2c)
+
 ## 0.23.6
 
 ### Patch Changes
