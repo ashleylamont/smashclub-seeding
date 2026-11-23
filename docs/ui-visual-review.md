@@ -17,6 +17,8 @@ Coverage includes:
 
 CI runs screenshot comparisons on `macos-15` in **UI accessibility and visuals**, matching the committed Darwin snapshot suffix. Its `ui-review` artifact contains the HTML report, traces and expected, actual and difference images. **UI behavior and accessibility** runs the rest of the fixture suite in three Ubuntu shards. Each uploads its own HTML report, traces and diagnostic captures in `ui-portable-review-1`, `ui-portable-review-2`, or `ui-portable-review-3`. **All checks** requires all three shards and the Darwin job.
 
+For a review with a designer or tournament organiser, see the [local design walkthrough and venue checks](ui-foundations.md#rehearse-a-design-change).
+
 Use the `darwinBaseline` test details and `darwinScreenshot` helper when adding a baseline comparison. Plain diagnostic captures and accessibility checks can run in the portable suite. A spec can contain cases for both runners. The platform command checks that the selected cases cover the full suite exactly once and disables snapshot updates on both runners. **All checks** requires the same case set and tags on both platforms. The Ubuntu runners agree on a plan that assigns each portable case to exactly one shard. Each runner verifies that every assigned case passes on the first attempt.
 
 ## Reviewing an intentional visual change
