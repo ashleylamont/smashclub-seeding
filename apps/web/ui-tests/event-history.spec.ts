@@ -66,6 +66,10 @@ test(
         },
       ],
     };
+    // Keep foreground polling from consuming the scripted failures for these manual controls.
+    await page.addInitScript(() => {
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden' });
+    });
     const fixture = await mockEvent(page, options);
     await page.goto(`/operate/${PLAN_ID}?view=history`);
     const history = page.getByRole('tabpanel', { name: 'History', exact: true });
