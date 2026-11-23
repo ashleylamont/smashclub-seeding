@@ -196,10 +196,14 @@ for (const width of [320, 390, 1440]) {
       await expect.soft(shortAlias).toHaveAccessibleName(/Cam,.*provisional rating/i);
       await established.focus();
       await page.keyboard.press('Tab');
-      await expect(
-        board.getByRole('button', { name: /Preview Long-absent leader/i }),
-      ).toBeFocused();
-      await page.keyboard.press('Tab');
+      if (width <= 720) {
+        await expect(
+          board.getByRole('button', { name: /Preview Long-absent leader/i }),
+        ).toBeFocused();
+        await page.keyboard.press('Tab');
+      } else {
+        await expect(board.getByRole('button', { name: /^Preview / })).toHaveCount(0);
+      }
       await expect(longAlias).toBeFocused();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       expect(
