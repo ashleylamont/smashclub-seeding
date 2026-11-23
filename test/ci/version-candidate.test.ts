@@ -159,18 +159,24 @@ describe('automatic version candidate admission', () => {
   });
 
   it('rejects foreign or unverifiable candidates and unavailable evidence', () => {
-    for (const override of [
-      { pr: { ...pr, user: { id: 44 } } },
-      { pr: { ...pr, head: { ...pr.head, repo: { id: 44 } } } },
-      { commit: { ...commit, author: { id: 44 } } },
-      { commit: { ...commit, commit: { verification: { verified: false } } } },
-      { pr: { ...pr, auto_merge: undefined } },
-      { list: undefined },
-      { runs: { total_count: 0 } },
-      { runs: collection('workflow_runs', [{ ...run, actor: { id: 44 } }]) },
-      { checks: { total_count: 0 } },
-    ]) {
-      expect(() => fixture(override)).toThrow();
+    const untrustedPr = 'not a recognized release App candidate';
+    const unsignedCommit = 'not a recognized signed release App commit';
+    const cases = [
+      [{ pr: { ...pr, user: { id: 44 } } }, untrustedPr],
+      [{ pr: { ...pr, head: { ...pr.head, repo: { id: 44 } } } }, untrustedPr],
+      [{ commit: { ...commit, author: { id: 44 } } }, unsignedCommit],
+      [{ commit: { ...commit, commit: { verification: { verified: false } } } }, unsignedCommit],
+      [{ pr: { ...pr, auto_merge: undefined } }, untrustedPr],
+      [{ list: undefined }, 'Could not identify one release candidate'],
+      [{ runs: { total_count: 0 } }, 'Could not verify complete GitHub workflow_runs evidence'],
+      [
+        { runs: collection('workflow_runs', [{ ...run, actor: { id: 44 } }]) },
+        'Could not attribute the exact release candidate CI to the release App',
+      ],
+      [{ checks: { total_count: 0 } }, 'Could not verify complete GitHub check_runs evidence'],
+    ] as const;
+    for (const [override, error] of cases) {
+      expect(() => fixture(override)).toThrow(error);
     }
   });
 
@@ -187,7 +193,9 @@ describe('automatic version candidate admission', () => {
   });
 
   it('refuses to overwrite an unrelated orphan branch and compares its exact tip', () => {
-    expect(() => fixture({ list: [], commit: { ...commit, author: { id: 44 } } })).toThrow();
+    expect(() => fixture({ list: [], commit: { ...commit, author: { id: 44 } } })).toThrow(
+      'not a recognized signed release App commit',
+    );
     expect(fixture({ list: [] }).result.candidate).toBe(`none:${head}`);
     expect(fixture({ list: [] }, { expected: 'none' }).result.action).toBe('retain');
   });
@@ -271,8 +279,10 @@ describe('queue a new signed release candidate', () => {
   it('returns only the signed candidate just created from the exact workflow source', () => {
     expect(queue()).toBe(head);
     expect(queue({ auto_merge: pr.auto_merge })).toBeNull();
-    expect(() => queue({}, { parents: [{ sha: source }] })).toThrow();
-    expect(() => queue({ user: { id: 44 } })).toThrow();
+    expect(() => queue({}, { parents: [{ sha: source }] })).toThrow(
+      'The new version PR no longer points to this run’s signed candidate.',
+    );
+    expect(() => queue({ user: { id: 44 } })).toThrow('not a recognized release App candidate');
   });
 
   it('keeps an existing or drafted candidate paused if auto-merge was disabled', () => {
