@@ -169,15 +169,16 @@
   z-index: 10;
 }
 
-/* Five columns of short values. Squeezed onto a phone this became "Apr / 15, /
-   2026" against "Dev / Weekly / 5 / Rookies" — taller than scrolling, and
-   unreadable with it. It keeps its shape; the container scrolls. */
 .match-table {
   --table-min: 600px;
 }
 
-.match-table td:first-child {
+.match-log-date {
   white-space: nowrap;
+}
+
+.match-log-field-label {
+  display: none;
 }
 
 .match-log-characters:empty {
@@ -217,24 +218,25 @@
  * Outcome is carried by a coloured left edge *and* by the W/L glyph in the
  * result column, so it never depends on colour alone.
  */
-.match-table tr td:first-child {
-  border-left: 3px solid transparent;
+.match-table tbody tr {
+  --match-result-border: transparent;
 }
 
-.match-table tr.win td:first-child {
-  border-left-color: var(--good);
+.match-table tbody tr.win {
+  --match-result-border: var(--good);
 }
 
-.match-table tr.loss td:first-child {
-  border-left-color: var(--bad);
+.match-table tbody tr.loss {
+  --match-result-border: var(--bad);
 }
 
-.match-table tr.decay {
+.match-table tbody tr.decay {
+  --match-result-border: var(--warn);
   color: var(--text-soft);
 }
 
-.match-table tr.decay td:first-child {
-  border-left-color: var(--warn);
+.match-table .match-log-date {
+  border-left: 3px solid var(--match-result-border);
 }
 
 .result-win {
@@ -308,21 +310,108 @@
     border-right: none;
     border-bottom: 1px solid var(--border);
   }
-  /*
-   * The log scrolls sideways here, and a region that scrolls both ways inside a
-   * page that also scrolls is a trap for a thumb — a flick meant for the page
-   * gets eaten by the box. So the height cap comes off and the page takes the
-   * vertical scrolling.
-   *
-   * The header stops being sticky with it: the box is still its own scrollport
-   * (it has to be, to scroll sideways), so a sticky header in it has nothing to
-   * travel along and would only be pinned to a top edge it already sits on.
-   */
   .match-history-scroll {
     max-height: none;
   }
   .match-table th {
     position: static;
+  }
+}
+
+@media (max-width: 46rem) {
+  .match-history-scroll {
+    overflow: visible;
+    border-bottom: 0;
+  }
+
+  .match-table {
+    --table-min: 0px;
+  }
+
+  .match-table,
+  .match-table tbody {
+    display: block;
+  }
+
+  /* Keep native column headers available to assistive technologies. */
+  .match-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .match-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 44%);
+    grid-template-areas:
+      'date stage'
+      'event event'
+      'opponent result'
+      'evidence evidence';
+    align-items: start;
+    gap: var(--s1) var(--s3);
+    padding: var(--s3) var(--s2);
+    border-inline-start: 3px solid var(--match-result-border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .match-table tbody tr:first-child {
+    border-top: 1px solid var(--border);
+  }
+
+  .match-table td {
+    padding: 0;
+    border-bottom: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .match-table .match-log-date {
+    grid-area: date;
+    border-left: 0;
+    color: var(--text-soft);
+    font-size: var(--fs-xs);
+  }
+
+  .match-table .match-log-stage {
+    grid-area: stage;
+    color: var(--text-soft);
+    font-size: var(--fs-xs);
+    text-align: right;
+  }
+
+  .match-log-event {
+    grid-area: event;
+  }
+
+  .match-log-opponent {
+    grid-area: opponent;
+    font-weight: 600;
+  }
+
+  .match-log-result {
+    grid-area: result;
+    text-align: right;
+  }
+
+  .match-table .match-log-characters {
+    max-inline-size: min(20ch, 100%);
+    margin-inline-start: auto;
+    text-align: start;
+  }
+
+  .match-table td.match-log-evidence {
+    grid-area: evidence;
+    color: var(--text-soft);
+    font-size: var(--fs-xs);
+    text-align: start;
+  }
+
+  .match-log-field-label {
+    display: inline;
+    margin-inline-end: var(--s1);
+    font-family: var(--sans);
   }
 }
 
