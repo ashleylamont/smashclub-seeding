@@ -428,14 +428,8 @@ export function Leaderboard({
                         ✓
                       </span>
                     )}
-                    {/* Says "we have barely seen this player" without pretending
-                        that makes them weak — the number itself is already
-                        shrunk toward the middle for exactly that reason. */}
                     {row.isProvisional && (
-                      <span
-                        className="provisional"
-                        title="Provisional — too few sets for this rating to have settled"
-                      >
+                      <span className="provisional" title="Provisional rating">
                         P
                       </span>
                     )}

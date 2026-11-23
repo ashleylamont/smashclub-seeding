@@ -333,9 +333,8 @@ function PlayerProfile({ data }: { data: PlayerData }) {
 
       {rating?.isProvisional && (
         <p className="banner banner-info provisional-note">
-          Provisional — too few sets so far for this rating to have settled, so it is held near the
-          middle of the field rather than swinging on a handful of results. It firms up as the sets
-          come in.
+          Your rating stays provisional until you meet the minimums for rated sets and club nights
+          and play at least one rated set in a main bracket. Rookie sets count toward the minimums.
         </p>
       )}
 

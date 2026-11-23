@@ -148,8 +148,21 @@ async function mockRankingsAndProfile(page: Page, anchored: boolean) {
     doublesResults: [],
   } satisfies PlayerData;
   fixture.responses['public.player'] = profile;
-  return { skill, clubRating, board, unexpected: fixture.unexpected };
+  return { skill, clubRating, board, profile, unexpected: fixture.unexpected };
 }
+
+// Rounded values from converged synthetic fits with the default rating settings.
+const provisionalProfiles = [
+  {
+    label: 'one main-bracket set',
+    mainSets: 1,
+    rookieSets: 0,
+    skill: 1425,
+    sd: 183,
+    confidence: 0.12,
+  },
+  { label: '49 rookie sets', mainSets: 0, rookieSets: 49, skill: 2005, sd: 108, confidence: 0.48 },
+];
 
 for (const width of [390, 1440]) {
   for (const theme of ['dark', 'light'] as const) {
@@ -170,6 +183,9 @@ for (const width of [390, 1440]) {
       const activeLink = board.getByRole('link', { name: /^Alex.*active rank 1.*club rating/i });
       await expect(board.locator('.board-count')).toContainText('Active rank');
       await expect(activeLink).toContainText(String(clubRating));
+      const badge = activeLink.locator('.provisional');
+      if (anchored) await expect(badge).toHaveAttribute('title', 'Provisional rating');
+      else await expect(badge).toHaveCount(0);
       await expect(board.getByRole('listitem')).toHaveCount(2);
       if (width === 390)
         await chooseOption(board.getByRole('combobox', { name: 'Sort' }), 'eventCount');
@@ -271,5 +287,94 @@ for (const width of [390, 1440]) {
       }
       expect(unexpected).toEqual([]);
     });
+
+    for (const { label, mainSets, rookieSets, skill, sd, confidence } of provisionalProfiles) {
+      test(`provisional profile with ${label} at ${width}px in ${theme}`, async ({
+        page,
+      }, info) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
+        const { profile, unexpected } = await mockRankingsAndProfile(page, false);
+        const rookieOnly = rookieSets > 0;
+        const matchCount = mainSets + rookieSets;
+        const clubNights = rookieOnly ? [playedNight, currentNight] : [currentNight];
+        Object.assign(profile.rating, {
+          isProvisional: true,
+          skillRating: skill,
+          clubRating: skill,
+          skillSd: sd,
+          activityPenalty: 0,
+          missedEvents: 0,
+          lastPlayedDate: currentNight,
+          eventCount: clubNights.length,
+          tournamentCount: clubNights.length,
+          mainMatchCount: mainSets,
+          rookieMatchCount: rookieSets,
+          uniqueOpponentCount: rookieOnly ? 33 : 1,
+          rookieRatio: rookieOnly ? 1 : 0,
+          matchCount,
+          wins: rookieSets,
+          losses: mainSets,
+          sampleConfidence: confidence,
+        });
+        profile.nights = clubNights.map((eventKey) => ({
+          eventKey,
+          played: true,
+          preRating: eventKey === playedNight || !rookieOnly ? 1500 : 1913,
+          postRating: eventKey === currentNight ? skill : 1913,
+          postRd: eventKey === currentNight ? sd : 116,
+          revisedRating: skill,
+          prePenalty: 0,
+          postPenalty: 0,
+        }));
+        profile.events = Array.from({ length: matchCount }, (_, seq) => {
+          const night = profile.nights[rookieOnly && seq >= 25 ? 1 : 0]!;
+          return {
+            ...profile.events[0]!,
+            seq,
+            won: rookieOnly,
+            isRookie: rookieOnly,
+            tournamentId: night.eventKey,
+            tournamentDate: `${night.eventKey}T08:00:00Z`,
+            postRating: night.postRating,
+            postRd: night.postRd,
+            revisedRating: night.revisedRating,
+          };
+        });
+        await page.goto(`/players/${alex.playerId}`);
+
+        await expect(page.getByRole('heading', { level: 1, name: alex.name })).toBeVisible();
+        await expect(page.locator('.profile-headline .headline-value')).toHaveText(String(skill));
+        await expect(page.locator('.profile-headline .headline-band')).toContainText(
+          `skill ${skill} ± ${sd}`,
+        );
+        const estimate = page.locator('.profile-stats .stat').filter({ hasText: 'Skill estimate' });
+        await expect(estimate.locator('.num')).toHaveText(String(skill));
+        await expect(page.getByText(`${mainSets} main / ${rookieSets} rookie sets`)).toBeVisible();
+        await expect(
+          page.getByRole('heading', { name: `Match log (${matchCount} sets)` }),
+        ).toBeVisible();
+        const note = page.locator('.provisional-note');
+        await expect(note).toContainText(/minimums for rated sets and club nights/);
+        await expect(note).toContainText(/at least one rated set in a main bracket/);
+        await expect(note).toContainText(/rookie sets count/i);
+
+        const help = page.getByRole('button', { name: 'Explain: Club rating' });
+        await help.press('Enter');
+        await expect(page.getByRole('dialog', { name: 'Club rating' })).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(help).toBeFocused();
+        await note.scrollIntoViewIfNeeded();
+        await expect(note).toBeInViewport({ ratio: 1 });
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await ready(page);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+        expect(
+          (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+        ).toEqual([]);
+        await page.screenshot({ fullPage: true, path: info.outputPath('provisional-profile.png') });
+        expect(unexpected).toEqual([]);
+      });
+    }
   }
 }
