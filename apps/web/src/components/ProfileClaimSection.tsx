@@ -275,7 +275,7 @@ function ClaimSearch({
   const trimmed = query.trim();
   const target = useQuery({
     queryKey: ['player', targetId],
-    queryFn: () => trpc.public.player.query({ playerId: targetId! }),
+    queryFn: () => trpc.public.player.query({ playerId: targetId!, verifiedFits: true }),
     enabled: Boolean(targetId),
   });
   const selected = target.data && 'player' in target.data ? target.data.player : null;

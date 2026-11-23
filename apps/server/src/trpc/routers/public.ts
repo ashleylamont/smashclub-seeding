@@ -3,7 +3,7 @@ import { playerSetScore } from '../../events/playerSetScore';
 import { playerDoublesHistory } from '../../events/playerDoublesHistory';
 import { publicParticipantNames } from '../../events/participantNames';
 import { z } from 'zod';
-import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import {
   companies,
   playerClaims,
@@ -43,6 +43,9 @@ import { headToHeadInput, readHeadToHead } from '../../events/headToHead';
 import { publicProcedure, router } from '../trpc';
 
 const playerName = publicPlayerName;
+const verifiedFitsInput = z.object({ verifiedFits: z.boolean().optional() });
+const playerInput = verifiedFitsInput.extend({ playerId: z.uuid() });
+const playedHistoryInput = verifiedFitsInput.nullish();
 type PublicRatingNight = Omit<
   WhrNightRating,
   'playerId' | 'preRating' | 'postRating' | 'postRd'
@@ -178,7 +181,7 @@ export const publicRouter = router({
     };
   }),
 
-  player: publicProcedure.input(z.object({ playerId: z.uuid() })).query(async ({ ctx, input }) => {
+  player: publicProcedure.input(playerInput).query(async ({ ctx, input }) => {
     const [player] = await ctx.db
       .select({
         id: players.id,
@@ -205,7 +208,7 @@ export const publicRouter = router({
     let nights: PublicRatingNight[] = [];
     if (run) {
       const { id: recomputeId } = run;
-      const { before, after } = await readNightFitAvailability(ctx.db, run);
+      const availability = input.verifiedFits ? await readNightFitAvailability(ctx.db, run) : null;
       const hasLedger = hasRatingNightLedger(run.stats);
       const [rating] = await ctx.db
         .select()
@@ -234,13 +237,17 @@ export const publicRouter = router({
           and(eq(ratingNights.recomputeId, recomputeId), eq(ratingNights.playerId, input.playerId)),
         )
         .orderBy(asc(ratingNights.eventKey));
-      nights = nightRows.map((night, index) => ({
-        ...night,
-        // Before their first rated night a player has the configured debut prior.
-        preRating:
-          (index === 0 && night.played) || before.has(night.eventKey) ? night.preRating : null,
-        ...publicPostNightEstimate(night, after.has(night.eventKey)),
-      }));
+      nights = availability
+        ? nightRows.map((night, index) => ({
+            ...night,
+            // Before their first rated night a player has the configured debut prior.
+            preRating:
+              (index === 0 && night.played) || availability.before.has(night.eventKey)
+                ? night.preRating
+                : null,
+            ...publicPostNightEstimate(night, availability.after.has(night.eventKey)),
+          }))
+        : nightRows;
 
       const opponents = players; // alias for readability in the join below
       const eventRows = await ctx.db
@@ -275,7 +282,7 @@ export const publicRouter = router({
         })
         .from(ratingEvents)
         .innerJoin(tournaments, eq(ratingEvents.tournamentId, tournaments.id))
-        .leftJoin(ratingNights, recordedRatingEventNight)
+        .leftJoin(ratingNights, availability && hasLedger ? recordedRatingEventNight : sql`false`)
         .leftJoin(sets, eq(ratingEvents.setId, sets.id))
         .leftJoin(opponents, eq(ratingEvents.opponentPlayerId, opponents.id))
         .where(
@@ -299,12 +306,13 @@ export const publicRouter = router({
           const tournamentDate = row.tournamentDate?.toISOString() ?? null;
           return {
             ...row,
-            ...publicPostNightEstimate(
-              row,
-              tournamentDate !== null &&
-                after.has(eventKeyOf(tournamentDate)) &&
-                (hasLedger ? matchedNight !== null : matchesFullFit(row, rating)),
-            ),
+            ...(availability &&
+              publicPostNightEstimate(
+                row,
+                tournamentDate !== null &&
+                  availability.after.has(eventKeyOf(tournamentDate)) &&
+                  (hasLedger ? matchedNight !== null : matchesFullFit(row, rating)),
+              )),
             score: (() => {
               const side =
                 p1PlayerId === input.playerId ? 1 : p2PlayerId === input.playerId ? 2 : null;
@@ -426,11 +434,11 @@ export const publicRouter = router({
     .query(({ ctx, input }) => readWhrResultImpact(ctx.db, input)),
 
   /** Played-set history for rankings form and the player list for rating comparisons. */
-  ratingHistory: publicProcedure.query(async ({ ctx }) => {
+  ratingHistory: publicProcedure.input(playedHistoryInput).query(async ({ ctx, input }) => {
     const run = await latestCompletedRecompute(ctx.db);
     if (!run) return { events: [], players: [] };
     const { id: recomputeId } = run;
-    const { after } = await readNightFitAvailability(ctx.db, run);
+    const availability = input?.verifiedFits ? await readNightFitAvailability(ctx.db, run) : null;
     const hasLedger = hasRatingNightLedger(run.stats);
     const eventRows = await ctx.db
       .select({
@@ -447,7 +455,7 @@ export const publicRouter = router({
       })
       .from(ratingEvents)
       .innerJoin(tournaments, eq(ratingEvents.tournamentId, tournaments.id))
-      .leftJoin(ratingNights, recordedRatingEventNight)
+      .leftJoin(ratingNights, availability && hasLedger ? recordedRatingEventNight : sql`false`)
       .where(eq(ratingEvents.recomputeId, recomputeId))
       .orderBy(asc(ratingEvents.seq));
     const playerRows = await ctx.db
@@ -464,19 +472,27 @@ export const publicRouter = router({
       .innerJoin(players, eq(playerRatings.playerId, players.id))
       .where(eq(playerRatings.recomputeId, recomputeId))
       .orderBy(asc(playerRatings.rank));
-    const legacyBoard = hasLedger ? null : new Map(playerRows.map((row) => [row.playerId, row]));
+    const legacyBoard =
+      availability && !hasLedger ? new Map(playerRows.map((row) => [row.playerId, row])) : null;
     return {
-      events: eventRows.map(({ eventDate, matchedNight, ...row }) => {
-        const eventKey = eventDate ? eventKeyOf(eventDate.toISOString()) : null;
-        const verified = hasLedger
-          ? matchedNight !== null
-          : matchesFullFit(row, legacyBoard?.get(row.playerId));
-        return {
-          ...row,
-          eventKey,
-          ...publicPostNightEstimate(row, eventKey !== null && after.has(eventKey) && verified),
-        };
-      }),
+      events: eventRows
+        // Earlier clients expect an event date for every row.
+        .filter(({ eventDate }) => availability || eventDate !== null)
+        .map(({ eventDate, matchedNight, ...row }) => {
+          const eventKey = eventDate ? eventKeyOf(eventDate.toISOString()) : null;
+          const verified = hasLedger
+            ? matchedNight !== null
+            : matchesFullFit(row, legacyBoard?.get(row.playerId));
+          return {
+            ...row,
+            eventKey,
+            ...(availability &&
+              publicPostNightEstimate(
+                row,
+                eventKey !== null && availability.after.has(eventKey) && verified,
+              )),
+          };
+        }),
       players: playerRows.map(
         ({ canonicalName, displayName, rating: _rating, rd: _rd, ...row }) => ({
           ...row,
@@ -488,8 +504,8 @@ export const publicRouter = router({
 
   /** Night estimates for the chart's selected players, including nights they missed. */
   ratingNightHistory: publicProcedure
-    .input(z.object({ playerIds: z.array(z.uuid()).min(1).max(8) }))
-    .query(({ ctx, input }) => readRatingNightHistory(ctx.db, input.playerIds)),
+    .input(verifiedFitsInput.extend({ playerIds: z.array(z.uuid()).min(1).max(8) }))
+    .query(({ ctx, input }) => readRatingNightHistory(ctx.db, input.playerIds, input.verifiedFits)),
 
   tournaments: publicProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db.select().from(tournaments).orderBy(desc(tournaments.eventDate));

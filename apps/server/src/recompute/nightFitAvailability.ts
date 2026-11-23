@@ -18,7 +18,7 @@ export const recordedRatingEventNight = and(
 
 export function matchesFullFit(
   row: { postRating: number; postRd: number },
-  board: { rating: number; rd: number } | null | undefined,
+  board: { rating: number | null; rd: number | null } | null | undefined,
 ) {
   return board != null && row.postRating === board.rating && row.postRd === board.rd;
 }

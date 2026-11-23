@@ -31,7 +31,7 @@ export function PlayerPage() {
 
   const query = useQuery({
     queryKey: ['player', playerId],
-    queryFn: () => trpc.public.player.query({ playerId }),
+    queryFn: () => trpc.public.player.query({ playerId, verifiedFits: true }),
   });
 
   // Merged players redirect to their canonical record.

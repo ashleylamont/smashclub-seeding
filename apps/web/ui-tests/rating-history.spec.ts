@@ -84,8 +84,9 @@ async function mockRatingHistory(
       .sort((a, b) => a.eventKey.localeCompare(b.eventKey))
       .map(({ played: _played, ...night }, seq) => ({
         ...night,
-        postRating: unavailableNight && night.eventKey === dates[0] ? null : night.postRating,
-        postRd: unavailableNight && night.eventKey === dates[0] ? null : night.postRd,
+        ...(unavailableNight && night.eventKey === dates[0]
+          ? { postRating: null, postRd: null }
+          : { postRating: night.postRating, postRd: night.postRd }),
         seq,
         tournamentId: returning.playerId,
         isDecay: false,
@@ -93,12 +94,16 @@ async function mockRatingHistory(
       })),
     players: [returning, debut],
   };
-  fixture.responses['public.ratingHistory'] = history;
+  fixture.queryResponses.set('public.ratingHistory', (input) => {
+    expect(input).toEqual({ verifiedFits: true });
+    return history;
+  });
   fixture.responses['public.tournaments'] = [];
   fixture.responses['eventOps.publicEvents'] = [];
   const requests: string[][] = [];
   fixture.queryResponses.set('public.ratingNightHistory', (input) => {
-    const { playerIds } = input as { playerIds: string[] };
+    const { playerIds, verifiedFits } = input as { playerIds: string[]; verifiedFits: boolean };
+    expect(verifiedFits).toBe(true);
     requests.push(playerIds);
     const points = emptySelection
       ? []

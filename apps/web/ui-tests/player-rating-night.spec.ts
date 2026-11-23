@@ -181,6 +181,7 @@ async function mockProfile(
           }
         }
         expect(procedure).toBe('public.player');
+        expect(batched ? input[index] : input).toEqual({ playerId, verifiedFits: true });
         return { result: { data: profile } };
       }),
     );
@@ -283,7 +284,9 @@ for (const theme of ['dark', 'light'] as const) {
       const picker = breakdown.getByRole('combobox', { name: 'Rating night' });
       await picker.focus();
       await picker.press('Enter');
+      await expect(page.getByRole('option', { selected: true })).toBeFocused();
       await page.keyboard.press('End');
+      await expect(page.getByRole('option', { name: '31 July 2025', exact: true })).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(picker).toBeFocused();
       await expect(breakdown).toContainText('1608.7 → Unavailable');

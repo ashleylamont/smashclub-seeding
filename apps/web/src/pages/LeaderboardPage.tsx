@@ -36,7 +36,7 @@ export function LeaderboardPage() {
   });
   const ratingHistory = useQuery({
     queryKey: ['ratingHistory'],
-    queryFn: () => trpc.public.ratingHistory.query(),
+    queryFn: () => trpc.public.ratingHistory.query({ verifiedFits: true }),
   });
   const tournaments = useQuery({
     queryKey: ['tournaments'],

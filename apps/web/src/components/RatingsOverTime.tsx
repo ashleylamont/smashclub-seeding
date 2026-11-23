@@ -91,7 +91,7 @@ export function RatingsOverTime({ players }: RatingsOverTimeProps) {
   const selectedIds = useMemo(() => new Set(playerIds), [playerIds]);
   const nightly = useQuery({
     queryKey: ['ratingNightHistory', playerIds],
-    queryFn: () => trpc.public.ratingNightHistory.query({ playerIds }),
+    queryFn: () => trpc.public.ratingNightHistory.query({ playerIds, verifiedFits: true }),
     enabled: playerIds.length > 0,
   });
   const full = selected.length >= MAX_SERIES;
