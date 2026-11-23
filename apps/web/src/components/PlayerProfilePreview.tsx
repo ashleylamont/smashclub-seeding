@@ -8,7 +8,23 @@ import { Dialog } from './ui/Dialog';
 import { LoadingState, Notice } from './ui/Feedback';
 import './PlayerProfilePreview.css';
 
-export function PlayerProfilePreview({ playerId, name }: { playerId: string; name: string }) {
+export function PlayerProfileName({ playerId, name }: { playerId?: string | null; name: string }) {
+  return playerId ? (
+    <PlayerProfilePreview key={playerId} playerId={playerId} name={name} trigger="name" />
+  ) : (
+    name
+  );
+}
+
+export function PlayerProfilePreview({
+  playerId,
+  name,
+  trigger = 'button',
+}: {
+  playerId: string;
+  name: string;
+  trigger?: 'button' | 'name';
+}) {
   const [open, setOpen] = useState(false);
   const query = useQuery({
     queryKey: ['playerPreview', playerId],
@@ -26,8 +42,13 @@ export function PlayerProfilePreview({ playerId, name }: { playerId: string; nam
       open={open}
       onOpenChange={setOpen}
       trigger={
-        <Button size="small" aria-label={`Preview ${name}`}>
-          Preview
+        <Button
+          size="small"
+          variant={trigger === 'name' ? 'plain' : 'default'}
+          className={trigger === 'name' ? 'link-button player-profile-preview-name' : undefined}
+          aria-label={`Preview ${name}`}
+        >
+          {trigger === 'name' ? name : 'Preview'}
         </Button>
       }
     >

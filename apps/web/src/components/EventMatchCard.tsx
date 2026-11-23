@@ -2,17 +2,20 @@ import { matchParticipantName, matchPresentation } from '../lib/matchPresentatio
 import { linkedFinalCaption } from '../lib/linkedFinalCaption';
 import { poolKey, poolTitle, usesOpenPools } from '../lib/poolFlow';
 import { CharacterIcons } from './CharacterIcons';
+import { PlayerProfileName } from './PlayerProfilePreview';
 import type { LiveMatch } from '../lib/eventDisplay';
 export function MatchCard({
   match,
   station,
   nextMatch,
   structure,
+  showPlayerPreviews = false,
 }: {
   match: LiveMatch;
   station?: string;
   nextMatch?: LiveMatch;
   structure?: string;
+  showPlayerPreviews?: boolean;
 }) {
   const presentation = matchPresentation(match);
   const linked = linkedFinalCaption(match);
@@ -36,13 +39,11 @@ export function MatchCard({
       </div>
       {[
         {
-          name: match.player1Name,
           characters: match.player1Characters,
           id: match.player1Id,
           score: match.score1,
         },
         {
-          name: match.player2Name,
           characters: match.player2Characters,
           id: match.player2Id,
           score: match.score2,
@@ -53,7 +54,10 @@ export function MatchCard({
           key={i}
         >
           <span>
-            {matchParticipantName(match, i === 0 ? 0 : 1)}
+            <PlayerProfileName
+              playerId={showPlayerPreviews ? p.id : null}
+              name={matchParticipantName(match, i === 0 ? 0 : 1)}
+            />
             <CharacterIcons slugs={p.characters ?? []} />
           </span>
           {presentation.showScores && <strong>{p.score ?? '—'}</strong>}

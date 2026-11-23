@@ -35,6 +35,7 @@ export function PlayerHubBoard({
   archiveOnly?: boolean;
 }) {
   const board = playerHubView(data, player, selectedPool);
+  const showPlayerPreviews = !board.closed && data.plan.competitionFormat === 'singles';
   const runEnded = journeyState !== undefined && endedJourneys.has(journeyState);
   const superseded = (data.supersededPlayedSets ?? []).filter((set) =>
     player
@@ -80,6 +81,7 @@ export function PlayerHubBoard({
           stations={data.stations}
           recordedOnly={board.closed}
           structure={data.plan.structure}
+          showPlayerPreviews={showPlayerPreviews}
         />
         {!board.pools.length && (
           <>
@@ -101,6 +103,7 @@ export function PlayerHubBoard({
         runEnded={runEnded}
         archiveOnly={archiveOnly}
         archiveEntry={archiveEntry === 'brackets'}
+        showPlayerPreviews={showPlayerPreviews}
       />
     ),
     results: (
@@ -121,6 +124,7 @@ export function PlayerHubBoard({
                 structure={data.plan.structure}
                 nextMatch={board.closed ? undefined : nextMeaningfulMatch(data.matches, match)}
                 station={matchStation(data, match, board.closed).name ?? undefined}
+                showPlayerPreviews={showPlayerPreviews}
               />
             ))}
           </div>
@@ -246,6 +250,7 @@ function PlayerHubBracketSection({
   runEnded,
   archiveOnly,
   archiveEntry,
+  showPlayerPreviews,
 }: {
   data: PublicEventSnapshot;
   board: ReturnType<typeof playerHubView>;
@@ -253,6 +258,7 @@ function PlayerHubBracketSection({
   runEnded: boolean;
   archiveOnly: boolean;
   archiveEntry: boolean;
+  showPlayerPreviews: boolean;
 }) {
   const recordedPath = board.closed || runEnded;
   const nativeBrackets = recordedPath && player ? board.assignedBrackets : board.nativeBrackets;
@@ -274,6 +280,7 @@ function PlayerHubBracketSection({
       entrants={data.entrants}
       linked={board.linked}
       recordedOnly={board.closed}
+      showPlayerPreviews={showPlayerPreviews}
       graphicContext={{
         eventName: data.plan.name,
         eventDate: formatDate(data.plan.eventDate),
