@@ -18,6 +18,14 @@ Automatic bracket seeding uses a conservative rating that accounts for uncertain
 
 Uncertainty and attendance are separate: missing events can widen a rating's uncertainty, while the club's attendance policy is an explicit deduction. WHR retains its fitted uncertainty, score-margin evidence weights and optional rookie display policy. The Python CLI in [`legacy/`](../legacy/) is an unsupported historical archive. Settings changes trigger a recompute. The model evaluation harness is available through `pnpm rank-eval`.
 
+### A bracket win and the rating gap
+
+On 29 September 2026, Player A beat Players B and C 2–1 in singles and placed first in their bracket. Player A's raw WHR gap to Player B narrowed from 103.5 to 66.6 points, and their gap to Player C narrowed from 37.1 to 21.1 points. Player A moved from 49th to 39th in **Published rank**. Players B and C had published ranks of 30 and 32 after the night.
+
+The offline replay fitted the archived eligible sets once using only earlier nights and once including that night. The second fit reproduced the archived board. Player B's legacy profile showed +83.1 points, which combined +25.7 from the night and +57.4 from a revision to earlier estimates. Returning to play also cleared Player B's separate 120-point attendance deduction.
+
+On **Head to head**, **Skill gap by night** compares raw estimates before and after all rated sets on a shared night. On **Rankings**, **How to read the board** defines **Tournament placing** as your finish in a bracket or division and **Bracket seed** as your starting position in a draw. Automatic rating-based seeding uses the saved skill estimate and its uncertainty from the draw's rating snapshot.
+
 ## Identity review
 
 The registry stores a canonical player name and known aliases. Sync cleans entrant names and applies an evidence ladder: exact known names or stored decisions, then unambiguous structured short forms. Fuzzy similarity provides candidates but never links on its own. A reviewer can select a player, create one or keep an entrant separate. Decisions persist; short-form inferences are not saved as permanent aliases, so a later ambiguity returns to review.
