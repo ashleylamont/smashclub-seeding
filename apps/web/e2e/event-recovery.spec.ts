@@ -445,6 +445,108 @@ test('reconnected TO retains its draft but must reopen after another TO records 
   await expect(card.getByRole('button', { name: 'Confirm result', exact: true })).toBeEnabled();
 });
 
+test('signed-out progress follows the assigned organiser’s finals draw', async ({
+  browser,
+  baseURL,
+  page,
+  request,
+  night,
+}, testInfo) => {
+  test.setTimeout(180_000);
+  const { planId } = night;
+  await signIn(page.request, 'organiser@smashclub.dev');
+  const source = await query<{
+    divisions: {
+      division: string;
+      pools: {
+        poolIndex: number;
+        members: { playerId: string }[];
+      }[];
+    }[];
+  }>(request, 'admin.eventPlanner.plan', { planId });
+  const poolOrder = (division: string, poolIndex: number) =>
+    source.divisions
+      .find((item) => item.division === division)!
+      .pools.find((pool) => pool.poolIndex === poolIndex)!
+      .members.map((member) => member.playerId);
+  const initial = await query<{
+    matches: (Match & { stage: string; player1Id: string; player2Id: string })[];
+  }>(page.request, 'eventOps.snapshot', { planId });
+  expect(initial.matches).toHaveLength(12);
+  for (const match of initial.matches) {
+    expect(match.stage).toBe('group');
+    const order = poolOrder(match.division, match.poolIndex);
+    const firstWins = order.indexOf(match.player1Id) < order.indexOf(match.player2Id);
+    await mutate(page.request, 'eventOps.reportScore', {
+      matchId: match.id,
+      expectedRevision: match.revision,
+      requestId: `progress-pool-${match.id}`,
+      score1: firstWins ? 2 : 0,
+      score2: firstWins ? 0 : 2,
+      outcome: 'played',
+    });
+  }
+  await page.goto(`/operate/${planId}`);
+  await page.getByRole('tab', { name: 'Standings / draw', exact: true }).click();
+  const preview = page.getByRole('button', { name: 'Preview finals', exact: true });
+  const create = page.getByRole('button', { name: 'Create ready finals', exact: true });
+  await preview.click();
+  await expect(create).toBeEnabled();
+
+  const visitor = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 } });
+  try {
+    const board = await visitor.newPage();
+    const snapshot = () =>
+      query<{
+        matches: { stage: string; status: string }[];
+        nativeBrackets: { id: string }[];
+        pendingFinals: { division: string }[];
+      }>(board.request, 'eventOps.snapshot', { planId });
+    const before = await snapshot();
+    expect(before.matches).toHaveLength(12);
+    expect(
+      before.matches.every(({ stage, status }) => stage === 'group' && status === 'complete'),
+    ).toBe(true);
+    expect(before.nativeBrackets).toHaveLength(0);
+    expect(before.pendingFinals).toHaveLength(4);
+    await board.goto(`/play/${planId}`);
+    const progress = board.locator('.player-event-overview');
+    await expect(progress).toBeVisible();
+    await board.evaluate(() => document.fonts.ready);
+    await testInfo.attach('before-finals-phone', {
+      body: await board.screenshot(),
+      contentType: 'image/png',
+    });
+    await expect(progress).toContainText('Pool progress · 12 / 12 sets complete');
+    const poolProgress = progress.getByRole('progressbar', { name: 'Pool sets completed' });
+    await expect(poolProgress).toHaveAttribute('value', '12');
+    await expect(poolProgress).toHaveAttribute('max', '12');
+    await expect(poolProgress).toHaveAccessibleDescription('The finals draw is pending.');
+
+    await create.click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Confirm', exact: true })
+      .click();
+    await expect(page.getByText('Ready finals created', { exact: false })).toBeVisible();
+    const published = await snapshot();
+    expect(published.nativeBrackets).toHaveLength(4);
+    expect(published.pendingFinals).toHaveLength(0);
+    expect(published.matches.filter(({ stage }) => stage !== 'group')).toHaveLength(4);
+    await expect(progress).toHaveText('Event progress · 12 / 16 sets complete');
+    const eventBar = progress.getByRole('progressbar', { name: 'Sets completed', exact: true });
+    await expect(eventBar).toHaveAttribute('value', '12');
+    await expect(eventBar).toHaveAttribute('max', '16');
+    await expect(poolProgress).toHaveCount(0);
+    await testInfo.attach('after-finals-phone', {
+      body: await board.screenshot(),
+      contentType: 'image/png',
+    });
+  } finally {
+    await visitor.close();
+  }
+});
+
 test('live board and OBS recover a result missed while disconnected without a reload', async ({
   browser,
   baseURL,
