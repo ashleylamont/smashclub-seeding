@@ -1,5 +1,6 @@
 breakthrough.spec.ts
 broadcast-sides.spec.ts
+broadcast-station-default.spec.ts
 bye-presentation.spec.ts
 event-attendance.spec.ts
 event-history.spec.ts

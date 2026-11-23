@@ -8,7 +8,7 @@ import { bracketCaptureOptions, mockEvent, PLAN_ID, ready } from './fixtures';
 const captureStyle = readFileSync(bracketCaptureOptions.stylePath, 'utf8');
 const alias = 'Alexandria with a long tournament alias from Western Sydney';
 
-async function stageFixture(page: Page) {
+async function stageFixture(page: Page, useDefault = false) {
   const { overview, unexpected } = await mockEvent(page, { role: 'admin', idle: true });
   const station = overview.stations[0]!;
   Object.assign(station, { name: 'Stage', currentMatchId: null, status: 'free' });
@@ -64,7 +64,12 @@ async function stageFixture(page: Page) {
     sharedDispatch: { active: 1, capacity: 1, overCapacity: 0 },
     twitchBroadcast: { revision: 0, promotion: null },
   });
-  const url = `/operate/${PLAN_ID}?view=broadcast&station=${station.id}`;
+  if (useDefault) {
+    const floor = { ...station, id: 'floor-first', name: 'Floor 1' };
+    overview.stations.unshift(floor);
+    desk.stations.unshift({ ...deskStation, id: floor.id, name: floor.name });
+  }
+  const url = `/operate/${PLAN_ID}?view=broadcast${useDefault ? '' : `&station=${station.id}`}`;
   const panel = page.getByRole('tabpanel', { name: 'Broadcast', exact: true });
   const picker = panel.getByRole('combobox', { name: 'Ready pairing' });
   const start = panel.getByRole('button', { name: 'Start on Stage', exact: true });
@@ -78,8 +83,15 @@ for (const theme of ['dark', 'light'] as const)
     }, testInfo) => {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       await page.addInitScript((value) => localStorage.setItem('smashclub:theme', value), theme);
-      const { match, panel, picker, start, url, unexpected } = await stageFixture(page);
+      const { match, panel, picker, start, station, url, unexpected } = await stageFixture(
+        page,
+        true,
+      );
       await page.goto(url);
+      await expect(panel.getByRole('combobox', { name: 'Station', exact: true })).toHaveAttribute(
+        'data-value',
+        station.id,
+      );
       await expect(picker).toContainText('Choose a pairing');
       await expect(start).toBeDisabled();
       await picker.press('Enter');

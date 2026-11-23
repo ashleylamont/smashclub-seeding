@@ -7,6 +7,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { Select, SelectItem } from '../../components/ui/Select';
 import { BroadcastSideControls } from './BroadcastSideControls';
 import { MatchCard } from './OpsMatchCard';
+import { defaultBroadcastStation } from '../../lib/eventDisplay';
 import { matchPresentation } from '../../lib/matchPresentation';
 import { DEFAULT_PROGRESS_SECONDS } from '../../lib/broadcastProgress';
 import { namedStationStart, type DispatchCommandController } from './dispatchCommand';
@@ -29,7 +30,9 @@ export function MainStagePanel({
 }) {
   const search = useSearch({ strict: false }) as { station?: string };
   const navigate = useNavigate();
-  const station = data.stations.find((item) => item.id === search.station) ?? data.stations[0];
+  const station = search.station
+    ? (data.stations.find((item) => item.id === search.station) ?? data.stations[0])
+    : defaultBroadcastStation(data.stations);
   const match = data.matches.find((item) => item.id === station?.currentMatchId);
   const desk = data.operatorDispatch;
   const matchDisabled = disabled || (desk?.mode === 'shared' && dispatch.busy);
