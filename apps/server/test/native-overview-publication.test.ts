@@ -16,7 +16,7 @@ it('reads the draw and its publication from one Act snapshot across a real corre
   const organiser: SessionUser = {
     id: 'overview-assigned-organiser',
     name: 'Assigned organiser',
-    role: 'player',
+    role: 'user',
     email: 'overview-organiser@example.test',
   };
   const caller = (actor: SessionUser | null) =>
@@ -49,6 +49,17 @@ it('reads the draw and its publication from one Act snapshot across a real corre
         resolutionMethod: 'manual',
       })),
     });
+    const readPublishedOverview = async (operator: ReturnType<typeof caller>) => {
+      const overview = await operator.eventOps.overview({ planId });
+      if (
+        overview.plan.bracketMode !== 'native' ||
+        !overview.plan.liveOwned ||
+        !('publication' in overview) ||
+        overview.publication?.status !== 'published'
+      )
+        throw new Error('Expected a live-owned native overview with published results.');
+      return overview;
+    };
     await admin.admin.eventPlanner.freezeRoster({ planId });
     await admin.admin.eventPlanner.generatePools({ planId });
     await admin.eventOps.softLockPools({ planId, confirm: true });
@@ -79,7 +90,7 @@ it('reads the draw and its publication from one Act snapshot across a real corre
     await admin.eventOps.native.finalize({ planId });
     const sealed = await runtime.state(planId);
     const final = sealed.matches.find((match) => match.round === 2)!;
-    const first = await admin.eventOps.overview({ planId });
+    const first = await readPublishedOverview(admin);
     expect(first.publication).toMatchObject({ revision: 1, status: 'published' });
     expect(first.matches.find((match) => match.id === final.id)).toMatchObject({
       score1: 2,
@@ -111,7 +122,7 @@ it('reads the draw and its publication from one Act snapshot across a real corre
       await runtime.drainReactions();
       return captured;
     });
-    const during = await assigned.eventOps.overview({ planId });
+    const during = await readPublishedOverview(assigned);
     expect(read).toHaveBeenCalledWith(planId);
     read.mockRestore();
     expect(during.publication).toEqual(first.publication);
@@ -123,7 +134,7 @@ it('reads the draw and its publication from one Act snapshot across a real corre
     expect(during.nativeBrackets).toEqual(first.nativeBrackets);
 
     for (const operator of [admin, assigned]) {
-      const after = await operator.eventOps.overview({ planId });
+      const after = await readPublishedOverview(operator);
       expect(after.publication).toMatchObject({ revision: 2, status: 'published' });
       expect(after.matches.find((match) => match.id === final.id)).toMatchObject({
         score1: 0,
