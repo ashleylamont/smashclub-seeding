@@ -19,7 +19,10 @@ export interface PlayerEventView {
   won: boolean | null;
   postRating: number | null;
   postRd: number | null;
-  weight: number;
+  weight: number | null;
+  evidenceUnavailable?: 'history_changed' | 'not_rated' | 'older_run';
+  currentWon?: boolean;
+  forfeit?: boolean;
   /**
    * Current fit estimate at this night, revised as later results arrive.
    */
